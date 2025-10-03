@@ -1,0 +1,26 @@
+Needed libraries / functions
+-   Encoder
+    -   Read X
+    -   Read Y
+    -   Zero encoders
+-   Serial monitor input 
+    -   Read command
+    -   Parse command
+-   Testing gamepad
+    -   Read commands
+    -   Parse commands
+
+
+Sequence
+-   Set pins
+-   Initialize amps
+-   Initialize amp Serial
+
+
+
+
+- Inputs
+    - Read buttons
+    
+
+- Accessible motor drive function
