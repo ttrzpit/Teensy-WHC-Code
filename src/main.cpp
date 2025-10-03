@@ -25,7 +25,7 @@ GamepadClass Gamepad;
 uint16_t serialTimerFrequency = 10;	   // [Hz]
 
 // Timing variables
-elapsedMillis serialRuntimeMillis;
+elapsedMillis serialRuntimeMillis;		 // Timer for serial input/output
 
 // Serial command buffer
 static char	   inputCommandBuffer[8];
@@ -43,6 +43,8 @@ static void ProcessSerial( const char* buffer );
  * 
  */
 void setup() {
+
+  pinMode ( 13, OUTPUT ) ; 
 
 	Serial.begin( 9600 );
 	Serial.println( "Starting..." );
@@ -187,5 +189,8 @@ void ShowSerial() {
 		Serial.print( F( "    " ) );
 
 		Serial.println();
+
+    // Toggle LED as heartbeat
+    digitalToggleFast ( 13 ) ; 
 	}
 }

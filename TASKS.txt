@@ -1,4 +1,15 @@
-Needed libraries / functions
+Libraries / Functions
+** TO DO **
+-   Amplifier
+    -   Initialize amplifier serial
+    -   Get encoder values
+    -   Reset encoder values
+    -   Set tension values
+    -   Measure limits
+    -   DriveXY
+    -   DriveABC
+
+** COMPLETE ** 
 -   Encoder
     -   Read X
     -   Read Y
