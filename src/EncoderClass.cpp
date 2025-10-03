@@ -3,7 +3,7 @@
 EncoderClass::EncoderClass()
 	: encoderHorizontal( PIN_ENCODER_HOR_A, PIN_ENCODER_HOR_B )
 	, encoderVertical( PIN_ENCODER_VER_A, PIN_ENCODER_VER_B ) {
-	InitializePins();
+		ConfigurePins();
 }
 
 
@@ -30,7 +30,7 @@ float EncoderClass::GetVerticalAngleDeg() {
  * @brief Initialize the pins on the Teensy
  * 
  */
-void EncoderClass::InitializePins() {
+void EncoderClass::ConfigurePins() {
 
     // Initialize pins
 	pinMode( PIN_ENCODER_HOR_A, INPUT );

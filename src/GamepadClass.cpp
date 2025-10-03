@@ -7,7 +7,7 @@
 GamepadClass::GamepadClass() {
 
 	// Initialize hardware IO
-	InitializePins();
+	ConfigurePins();
 
 	// Initialize threshold array values
 	InitializeThresholdArrays();
@@ -98,7 +98,7 @@ String GamepadClass::GetButtonStateString() {
  * @brief Initialize hardware pins
  * 
  */
-void GamepadClass::InitializePins() {
+void GamepadClass::ConfigurePins() {
 
 	// Initialize the pins on the Teensy
 	pinMode( PIN_GAMEPAD_CARDINAL, INPUT );

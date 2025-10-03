@@ -11,12 +11,14 @@
 #include <Arduino.h>
 
 // Custom libraries
+#include "AmplifierClass.h"
 #include "EncoderClass.h"
 #include "GamepadClass.h"
 
 // Create class objects
-EncoderClass Encoders;
-GamepadClass Gamepad;
+EncoderClass   Encoders;
+GamepadClass   Gamepad;
+AmplifierClass Amplifier;
 
 // Interval timers
 // IntervalTimer SerialDisplayTimer;
@@ -25,7 +27,7 @@ GamepadClass Gamepad;
 uint16_t serialTimerFrequency = 10;	   // [Hz]
 
 // Timing variables
-elapsedMillis serialRuntimeMillis;		 // Timer for serial input/output
+elapsedMillis serialRuntimeMillis;	  // Timer for serial input/output
 
 // Serial command buffer
 static char	   inputCommandBuffer[8];
@@ -44,7 +46,7 @@ static void ProcessSerial( const char* buffer );
  */
 void setup() {
 
-  pinMode ( 13, OUTPUT ) ; 
+	pinMode( 13, OUTPUT );
 
 	Serial.begin( 9600 );
 	Serial.println( "Starting..." );
@@ -190,7 +192,7 @@ void ShowSerial() {
 
 		Serial.println();
 
-    // Toggle LED as heartbeat
-    digitalToggleFast ( 13 ) ; 
+		// Toggle LED as heartbeat
+		digitalToggleFast( 13 );
 	}
 }

@@ -1,6 +1,19 @@
 Libraries / Functions
 ** TO DO **
 -   Amplifier
+    -   Instantiate new class
+        - Configure pins                -> ConfigurePins()   
+            -   Set pin modes
+            -   Disable amps            -> Disable()
+            -   Set analog resolution
+            -   Set PWM to Zero         -> SetZeroOutput()
+        -   Initialize HW serial
+            -   HWSerial.begin...
+        -   Reset into PWM mode         -> ResetIntoPwmMode() 
+            -   Turn on serial LEDs
+        -   Enable Amplifier
+        -   Delay
+
     -   Initialize amplifier serial
     -   Get encoder values
     -   Reset encoder values
@@ -35,3 +48,26 @@ Sequence
     
 
 - Accessible motor drive function
+
+
+
+
+/** Amplifier startup sequence
+  * - New Amplifier Class
+  *   - Configure pins
+  *     - 
+  *   - Initialize HW Serial 
+  
+  *   -	Disable amps
+  *   - Change resolution
+  *   - Zero output
+  *   - Begin HW serial (9600) 
+  *   - Reset into PWM mode
+  *   - Enable amplifiers
+  *   - Delay
+  * - Update 
+  *   - Pick state
+  *     - DrivePWM
+  *       - Constrain values
+  *       - Send command
+*/

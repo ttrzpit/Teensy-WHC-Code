@@ -20,7 +20,7 @@ class EncoderClass {
 
 private:
 	// Initialize class
-	void InitializePins();	  // Initialize Teensy pins
+	void ConfigurePins();	  // Initialize Teensy pins
 
 	// Encoder pins
 	int8_t PIN_ENCODER_HOR_A = 10;	  // Horizontal encoder A channel

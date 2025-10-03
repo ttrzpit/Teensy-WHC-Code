@@ -18,7 +18,7 @@ class GamepadClass {
 
 private:
 	// Initialize class
-	void InitializePins();				 // Initialize Teensy pins
+	void ConfigurePins();				 // Initialize Teensy pins
 	void InitializeThresholdArrays();	 // Initializes the threshold array values
 	void MapButtonValues();				 // Map the analog button values into their outputs
 
