@@ -44,8 +44,12 @@ private:
 
 
 public:
-	// Constructor with data manager handle
+	// Default constructor and safeguards to prevent multiple amplifier instances
 	EncoderClass();
+	EncoderClass( const EncoderClass& )			   = delete;
+	EncoderClass& operator=( const EncoderClass& ) = delete;
+	EncoderClass( EncoderClass&& )				   = delete;
+	EncoderClass& operator=( EncoderClass&& )	   = delete;
 
 	// Public functions
 	void  PollEncoders();

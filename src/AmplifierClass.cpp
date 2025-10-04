@@ -5,7 +5,46 @@ AmplifierClass::AmplifierClass() {
 	// Do not modify the order of the items below
 	CONFIGURE_ConfigurePins();
 	CONFIGURE_ConfigureHWSerialInterface();
-	COMMAND_ResetIntoPwmCurrentMode();
+	HWSERIAL_SetPwmCurrentMode();
+}
+
+
+/**
+ * @brief Function that gets called every loop to update serial interface
+ * 
+ */
+void AmplifierClass::Update() {
+
+
+	// Callback to HWSerialA
+	HWSERIAL_ProcessQueryA();
+	if ( HWSerialA.available() ) {
+		HWSERIAL_ReadQueryResponseA();
+	}
+
+	// Callback to HWSerialB
+	HWSERIAL_ProcessQueryB();
+	if ( HWSerialB.available() ) {
+		HWSERIAL_ReadQueryResponseB();
+	}
+
+	// Callback to HWSerialC
+	HWSERIAL_ProcessQueryC();
+	if ( HWSerialC.available() ) {
+		HWSERIAL_ReadQueryResponseC();
+	}
+
+
+
+	// Display output if timer ticks over
+	if ( timerRuntimeMillis >= ( 1000 / timerHWSerialFrequencyHz ) ) {
+
+		// Reset timer
+		timerRuntimeMillis = 0;
+
+		// Read Encoders
+		READ_Encoders();
+	}
 }
 
 
@@ -170,23 +209,24 @@ void AmplifierClass::COMMAND_Reset() {
  * @brief Sends commands to reset the amplifiers into PWM mode to apply
  * cogging compensation table (set in the Copley Tools app)
  */
-void AmplifierClass::COMMAND_ResetIntoPwmCurrentMode() {
+void AmplifierClass::HWSERIAL_SetPwmCurrentMode() {
 
 	// Reset amplifier to clear previous configurations
 	COMMAND_Reset();
 
 	// Send serial command to set amps into current mode
-	HWSERIAL_EnqueueQueryA ( HWSerial.Ascii.setCurrentMode ) ; 
-	delay ( 600 ) ; 
-	digitalWriteFast( PIN_AMPLIFIER_LED_A, HIGH ) ; 
-	HWSERIAL_EnqueueQueryB ( HWSerial.Ascii.setCurrentMode ) ; 
-	delay ( 600 ) ; 
-	digitalWriteFast( PIN_AMPLIFIER_LED_B, HIGH ) ; 
-	HWSERIAL_EnqueueQueryC ( HWSerial.Ascii.setCurrentMode ) ; 
-	delay ( 600 ) ; 
-	digitalWriteFast( PIN_AMPLIFIER_LED_C, HIGH ) ; 
+	HWSERIAL_EnqueueQueryA( HWSerial.Ascii.setCurrentMode );
+	delay( 600 );
+	digitalWriteFast( PIN_AMPLIFIER_LED_A, HIGH );
+	HWSERIAL_EnqueueQueryB( HWSerial.Ascii.setCurrentMode );
+	delay( 600 );
+	digitalWriteFast( PIN_AMPLIFIER_LED_B, HIGH );
+	HWSERIAL_EnqueueQueryC( HWSerial.Ascii.setCurrentMode );
+	delay( 600 );
+	digitalWriteFast( PIN_AMPLIFIER_LED_C, HIGH );
 
-	
+	// Update flag
+	HWSerial.isConnected = true;
 }
 
 
@@ -207,6 +247,16 @@ void AmplifierClass::COMMAND_SendCommandedPWM( uint16_t pwmA, uint16_t pwmB, uin
 	analogWrite( PIN_AMPLIFIER_PWM_C, pwmC );
 }
 
+
+/**
+ * @brief Sets the tensioning value, which is added to all PWM commands
+ * @param tensionPercentage Tensioning value, between 0 and 25%
+ */
+void AmplifierClass::COMMAND_SetTension( uint8_t tensionPercentage ) {
+
+	// Apply tension
+	// [TODO]
+}
 
 
 /**
@@ -325,7 +375,7 @@ void AmplifierClass::HWSERIAL_ProcessQueryB() {
 
 		// Extract first query
 		HWSerial.Query.outgoingNextB = HWSerial.Query.queueB.front();
-		HWSerial.Query.queueA.pop();
+		HWSerial.Query.queueB.pop();
 
 		// Update
 		HWSerial.Query.responseB	 = "";
@@ -347,7 +397,7 @@ void AmplifierClass::HWSERIAL_ProcessQueryC() {
 
 		// Extract first query
 		HWSerial.Query.outgoingNextC = HWSerial.Query.queueC.front();
-		HWSerial.Query.queueA.pop();
+		HWSerial.Query.queueC.pop();
 
 		// Update
 		HWSerial.Query.responseC	 = "";
@@ -478,12 +528,12 @@ void AmplifierClass::HWSERIAL_ParseResponseA() {
 	}
 	// GetEncoderCount
 	else if ( HWSerial.Query.outgoingNextA == HWSerial.Ascii.getEncoderCount ) {
-		Measured.countA = response.toInt();
+		Read.countA = response.toInt();
 		// dataHandle.getData()->PrintDebug( "GetCount[A]: " + String( shared->Amplifier.encoderMeasuredCountA ) );
 	}
 	// GetCurrent
 	else if ( HWSerial.Query.outgoingNextA == HWSerial.Ascii.getCurrentReading ) {
-		Measured.currentA = response.toInt();
+		Read.currentA = response.toInt();
 		// dataHandle.getData()->PrintDebug( "GetCurrent[A]: " + String( shared->Amplifier.currentMeasuredRawA ) );
 	}
 	// Set encoder zero
@@ -527,12 +577,12 @@ void AmplifierClass::HWSERIAL_ParseResponseB() {
 	}
 	// GetEncoderCount
 	else if ( HWSerial.Query.outgoingNextB == HWSerial.Ascii.getEncoderCount ) {
-		Measured.countB = response.toInt();
+		Read.countB = response.toInt();
 		// dataHandle.getData()->PrintDebug( "GetCount[A]: " + String( shared->Amplifier.encoderMeasuredCountA ) );
 	}
 	// GetCurrent
 	else if ( HWSerial.Query.outgoingNextB == HWSerial.Ascii.getCurrentReading ) {
-		Measured.currentB = response.toInt();
+		Read.currentB = response.toInt();
 		// dataHandle.getData()->PrintDebug( "GetCurrent[A]: " + String( shared->Amplifier.currentMeasuredRawA ) );
 	}
 	// Set encoder zero
@@ -576,12 +626,12 @@ void AmplifierClass::HWSERIAL_ParseResponseC() {
 	}
 	// GetEncoderCount
 	else if ( HWSerial.Query.outgoingNextC == HWSerial.Ascii.getEncoderCount ) {
-		Measured.countC = response.toInt();
+		Read.countC = response.toInt();
 		// dataHandle.getData()->PrintDebug( "GetCount[A]: " + String( shared->Amplifier.encoderMeasuredCountA ) );
 	}
 	// GetCurrent
 	else if ( HWSerial.Query.outgoingNextC == HWSerial.Ascii.getCurrentReading ) {
-		Measured.currentC = response.toInt();
+		Read.currentC = response.toInt();
 		// dataHandle.getData()->PrintDebug( "GetCurrent[A]: " + String( shared->Amplifier.currentMeasuredRawA ) );
 	}
 	// Set encoder zero
@@ -644,4 +694,80 @@ String AmplifierClass::FLAGS_GetStateStringB() {
  */
 String AmplifierClass::FLAGS_GetStateStringC() {
 	return "INCOMPLETE";
+}
+
+/**
+ * @brief Check if amplifiers are active
+ * @return true Amplfiers running
+ * @return false Amplifiers disabled
+ */
+bool AmplifierClass::FLAGS_GetAmplifierState() {
+
+	return ( Flags.isEnabledA && Flags.isEnabledB && Flags.isEnabledC );
+}
+
+
+
+/*  ======================================
+ *  ======================================
+ * 
+ *   RRRRR     EEEEEE    AAAAAAA    DDDDD
+ *   RR  RR    EE        AA   AA    DD  DD
+ *   RR  RR    EE        AA   AA    DD  DD
+ *   RRRRR     EEEE      AAAAAAA    DD  DD
+ *   RR  RR    EE        AA   AA    DD  DD
+ *   RR  RR    EE        AA   AA    DD  DD
+ *   RR   RR   EEEEEE    AA   AA    DDDDD
+ * 
+ *  ======================================
+ *  ======================================*/
+
+/**
+ * @brief Read encoders using HWserial
+ */
+void AmplifierClass::READ_Encoders() {
+
+	// Send serial command to read encoder
+	HWSERIAL_EnqueueQueryA( HWSerial.Ascii.getEncoderCount );
+	HWSERIAL_EnqueueQueryB( HWSerial.Ascii.getEncoderCount );
+	HWSERIAL_EnqueueQueryC( HWSerial.Ascii.getEncoderCount );
+}
+
+/**
+ * @brief Read amplifier baud rate
+ */
+void AmplifierClass::READ_BaudRates() {
+
+	// Send serial command to read encoder
+	HWSERIAL_EnqueueQueryA( HWSerial.Ascii.getBaud );
+	HWSERIAL_EnqueueQueryB( HWSerial.Ascii.getBaud );
+	HWSERIAL_EnqueueQueryC( HWSerial.Ascii.getBaud );
+}
+
+
+/**
+ * @brief Gets the encoder count from motor A
+ * @return int32_t encoder count in ticks
+ */
+int32_t AmplifierClass::READ_GetCountA() {
+
+	return Read.countA;
+}
+
+/**
+ * @brief Gets the encoder count from motor B
+ * @return int32_t encoder count in ticks
+ */
+int32_t AmplifierClass::READ_GetCountB() {
+
+	return Read.countB;
+}
+
+/**
+ * @brief Gets the encoder count from motor C
+ * @return int32_t encoder count in ticks
+ */
+int32_t AmplifierClass::READ_GetCountC() {
+
+	return Read.countC;
 }

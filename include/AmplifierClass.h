@@ -10,8 +10,8 @@
 #pragma once
 
 // Pre-built libraries
-#include "queue"		// For queuing HWSerial commands
 #include <Arduino.h>	// For arduino functions
+#include <queue>		// For queuing HWSerial commands
 
 // Hardware serial ports
 #define HWSerialA Serial5	 // AdEx
@@ -95,14 +95,17 @@ struct AmpCommandStruct {
 /**
  * @brief Struct for encoder items
  */
-struct MeasuredValuesStruct {
+struct ReadValuesStruct {
 
-	int16_t currentA = 0;	 // Measured current
-	int16_t currentB = 0;	 // Measured current
-	int16_t currentC = 0;	 // Measured current
-	int32_t countA	 = 0;	 // Encoder count
-	int32_t countB	 = 0;	 // Encoder count
-	int32_t countC	 = 0;	 // Encoder count
+	int16_t currentA  = 0;		 // Measured current
+	int16_t currentB  = 0;		 // Measured current
+	int16_t currentC  = 0;		 // Measured current
+	int32_t countA	  = 0;		 // Encoder count
+	int32_t countB	  = 0;		 // Encoder count
+	int32_t countC	  = 0;		 // Encoder count
+	float	angleDegA = 0.0f;	 // Angle in degrees
+	float	angleDegB = 0.0f;	 // Angle in degrees
+	float	angleDegC = 0.0f;	 // Angle in degrees
 };
 
 /**
@@ -131,6 +134,7 @@ struct HWSerialStruct {
 	QueryQueueStruct	Query;							// Struct of query queue items
 	AsciiStruct			Ascii;							// Struct of ascii items
 	AmpPropertiesStruct AmpProperty;					// Struct of amp properties
+	bool				isConnected			= false;	// State of HW serial connection
 	bool				isAwaitingResponseA = false;	// State indicator if HWSerial is awaiting a response
 	bool				isAwaitingResponseB = false;	// State indicator if HWSerial is awaiting a response
 	bool				isAwaitingResponseC = false;	// State indicator if HWSerial is awaiting a response
@@ -158,9 +162,21 @@ class AmplifierClass {
 	*  Amplifier Constructors  *
 	****************************/
 	public:
-	// Default constructor
+	// Default constructor and safeguards to prevent multiple amplifier instances
 	AmplifierClass();
+	AmplifierClass( const AmplifierClass& )			   = delete;
+	AmplifierClass& operator=( const AmplifierClass& ) = delete;
+	AmplifierClass( AmplifierClass&& )				   = delete;
+	AmplifierClass& operator=( AmplifierClass&& )	   = delete;
 
+	/************
+	*  Updates  *
+	*************/
+	private:
+	uint16_t	  timerHWSerialFrequencyHz = 10;	// Frequency to display timer outputs
+	elapsedMillis timerRuntimeMillis;				// Running timer in milliseconds
+	public:
+	void Update();	  // Update (called every loop)
 
 	/*************************************
 	*  Amplifier Configuration Elements  *
@@ -184,15 +200,16 @@ class AmplifierClass {
 	********************************/
 	AmpCommandStruct Command;	 // Struct of command elements
 	private:
-	void COMMAND_ResetIntoPwmCurrentMode();											 // Reset amplifiers into pwm current-control mode
 	void COMMAND_SetZeroOutput();													 // Send zero output to PWM
 	void COMMAND_SendCommandedPWM( uint16_t pwmA, uint16_t pwmB, uint16_t pwmC );	 // Send commanded PWM value to amplifiers
 	public:
 	void COMMAND_Disable();																	   // Disable amplifiers
 	void COMMAND_Enable();																	   // Enable amplifiers
 	void COMMAND_Reset();																	   // Reset amplifiers
-	void COMMAND_DriveXY( int8_t percentageX, int8_t percentageY );							   // Drive amplifiers through XY commands
+	void COMMAND_DrivePolarRT( int8_t percentageR, float theta );							   // Drive amplifier using polar coordinates
+	void COMMAND_DriveCoordXY( int8_t percentageX, int8_t percentageY );					   // Drive amplifiers through XY commands
 	void COMMAND_DriveABC( uint8_t percentageA, uint8_t percentageB, uint8_t percentageC );	   // Drive amplifiers through ABC commands
+	void COMMAND_SetTension( uint8_t tensionPercentage );									   // Set the tension to the given percentage
 
 	/*****************************
 	*  Amplifier State Elements  *
@@ -223,19 +240,26 @@ class AmplifierClass {
 	void HWSERIAL_ParseResponseA();						 // Parse response to query A
 	void HWSERIAL_ParseResponseB();						 // Parse response to query B
 	void HWSERIAL_ParseResponseC();						 // Parse response to query C
-
-	/***************************
- 	*  Measured Value Elements  *
- 	****************************/
-	MeasuredValuesStruct Measured;	  // Struct containing encoder elements
-	private:
-	// None
 	public:
-	int32_t MEASURE_GetCountA();	   // Encoder count
-	int32_t MEASURE_GetCountB();	   // Encoder count
-	int32_t MEASURE_GetCountC();	   // Encoder count
-	int16_t MEASURE_GetCurrentA();	   // Current measurement
-	int16_t MEASURE_GetCurrentB();	   // Current measurement
-	int16_t MEASURE_GetCurrentC();	   // Current measurement
+	void HWSERIAL_SetPwmCurrentMode();	  // Reset amplifiers into pwm current-control mode
 
+	/*************************
+ 	*  Read Values Elements  *
+ 	**************************/
+	ReadValuesStruct Read;	  // Struct containing encoder elements
+	private:
+	void READ_Encoders();	  // Read encoder counts via serial
+	void READ_Currents();	  // Read current values via serial
+	void READ_BaudRates();	  // Read baud rates
+	public:
+	int32_t READ_GetCountA();	   // Encoder count
+	int32_t READ_GetCountB();	   // Encoder count
+	int32_t READ_GetCountC();	   // Encoder count
+	int16_t READ_GetCurrentA();	   // Current measurement
+	int16_t READ_GetCurrentB();	   // Current measurement
+	int16_t READ_GetCurrentC();	   // Current measurement
+
+	/*************************
+ 	*  Read Values Elements  *
+ 	**************************/
 };
