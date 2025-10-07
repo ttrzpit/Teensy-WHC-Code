@@ -2,8 +2,19 @@
 
 EncoderClass::EncoderClass()
 	: encoderHorizontal( PIN_ENCODER_HOR_A, PIN_ENCODER_HOR_B )
-	, encoderVertical( PIN_ENCODER_VER_A, PIN_ENCODER_VER_B ) {
-		ConfigurePins();
+	, encoderVertical( PIN_ENCODER_VER_A, PIN_ENCODER_VER_B ) { }
+
+
+/**
+ * @brief Initialize class
+ */
+void EncoderClass::Begin() {
+
+	// Configure pins
+	ConfigurePins();
+
+	delay( 250 );
+	Serial.println( F( "Platform encoder initialization...            success!" ) );
 }
 
 
@@ -32,7 +43,7 @@ float EncoderClass::GetVerticalAngleDeg() {
  */
 void EncoderClass::ConfigurePins() {
 
-    // Initialize pins
+	// Initialize pins
 	pinMode( PIN_ENCODER_HOR_A, INPUT );
 	pinMode( PIN_ENCODER_HOR_B, INPUT );
 	pinMode( PIN_ENCODER_HOR_X, INPUT );
@@ -40,6 +51,17 @@ void EncoderClass::ConfigurePins() {
 	pinMode( PIN_ENCODER_VER_B, INPUT );
 	pinMode( PIN_ENCODER_VER_X, INPUT );
 }
+
+
+/**
+ * @brief Runs every loop to update encoder class
+ */
+void EncoderClass::Update() {
+
+	// Poll encoders
+	PollEncoders();
+}
+
 
 
 /**

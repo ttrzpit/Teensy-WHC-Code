@@ -1,13 +1,26 @@
 #include "AmplifierClass.h"
 
-AmplifierClass::AmplifierClass() {
+AmplifierClass::AmplifierClass() { }
+
+
+
+void AmplifierClass::Begin() {
 
 	// Do not modify the order of the items below
 	CONFIGURE_ConfigurePins();
-	CONFIGURE_ConfigureHWSerialInterface();
-	HWSERIAL_SetPwmCurrentMode();
-}
 
+	// Initialize amps baud at 9600
+	HWSERIAL_InitializeHardwareSerial();
+
+	// Configure amps for current control mode
+	HWSERIAL_SetPwmCurrentMode();
+
+	// Reset encoder value
+	HWSERIAL_SetEncodersZero();
+
+	delay( 250 );
+	Serial.println( F( "Amplifier initialization...                   success!" ) );
+}
 
 /**
  * @brief Function that gets called every loop to update serial interface
@@ -69,15 +82,29 @@ void AmplifierClass::Update() {
  * @brief Configures the hardware serial interface with the amplifiers
  * 
  */
-void AmplifierClass::CONFIGURE_ConfigureHWSerialInterface() {
+void AmplifierClass::HWSERIAL_InitializeHardwareSerial() {
 
-	// Establish hardware serial connection to amplifiers
+	// Add delay to allow serial monitor to open
+	digitalWriteFast( PIN_AMPLIFIER_LED_A, LOW );
+	digitalWriteFast( PIN_AMPLIFIER_LED_B, LOW );
+	digitalWriteFast( PIN_AMPLIFIER_LED_C, LOW );
+
+	// Establish hardware serial connection amp A
 	HWSerialA.begin( 9600 );
+	digitalWriteFast( PIN_AMPLIFIER_LED_A, HIGH );
 	delay( 100 );
+
+	// Establish hardware serial connection amp B
 	HWSerialB.begin( 9600 );
+	digitalWriteFast( PIN_AMPLIFIER_LED_B, HIGH );
 	delay( 100 );
+
+	// Establish hardware serial connection amp C
 	HWSerialC.begin( 9600 );
+	digitalWriteFast( PIN_AMPLIFIER_LED_C, HIGH );
 	delay( 100 );
+
+	Serial.println( F( "Amplifier HWSerial initialization...          success!" ));
 }
 
 
@@ -217,16 +244,31 @@ void AmplifierClass::HWSERIAL_SetPwmCurrentMode() {
 	// Send serial command to set amps into current mode
 	HWSERIAL_EnqueueQueryA( HWSerial.Ascii.setCurrentMode );
 	delay( 600 );
-	digitalWriteFast( PIN_AMPLIFIER_LED_A, HIGH );
 	HWSERIAL_EnqueueQueryB( HWSerial.Ascii.setCurrentMode );
 	delay( 600 );
-	digitalWriteFast( PIN_AMPLIFIER_LED_B, HIGH );
 	HWSERIAL_EnqueueQueryC( HWSerial.Ascii.setCurrentMode );
 	delay( 600 );
-	digitalWriteFast( PIN_AMPLIFIER_LED_C, HIGH );
 
-	// Update flag
-	HWSerial.isConnected = true;
+	Serial.println( F( "Amplifier current control initialization...   success!" ) );
+}
+
+
+
+/**
+ * @brief Sends commands to reset the amplifiers into PWM mode to apply
+ * cogging compensation table (set in the Copley Tools app)
+ */
+void AmplifierClass::HWSERIAL_SetEncodersZero() {
+
+	// Reset amplifier to clear previous configurations
+	HWSERIAL_EnqueueQueryA( HWSerial.Ascii.setEncoderZero );
+	delay( 100 );
+	HWSERIAL_EnqueueQueryB( HWSerial.Ascii.setEncoderZero );
+	delay( 100 );
+	HWSERIAL_EnqueueQueryC( HWSerial.Ascii.setEncoderZero );
+	delay( 100 );
+
+	Serial.println( F( "Amplifier encoder initialization...           success!" ) );
 }
 
 
@@ -516,6 +558,10 @@ void AmplifierClass::HWSERIAL_ParseResponseA() {
 	if ( HWSerial.Query.outgoingNextA == HWSerial.Ascii.getBaud ) {
 		HWSerial.AmpProperty.baudRateA = response.toInt();
 	}
+	// sETBaud
+	if ( HWSerial.Query.outgoingNextA == HWSerial.Ascii.setBaud115237 ) {
+		HWSerial.AmpProperty.baudRateA = response.toInt();
+	}
 	// SetCurrentMode
 	else if ( HWSerial.Query.outgoingNextA == HWSerial.Ascii.setCurrentMode ) {
 		Flags.isCurrentCommandedA = true;
@@ -528,7 +574,9 @@ void AmplifierClass::HWSERIAL_ParseResponseA() {
 	}
 	// GetEncoderCount
 	else if ( HWSerial.Query.outgoingNextA == HWSerial.Ascii.getEncoderCount ) {
-		Read.countA = response.toInt();
+		const long cnt = strtol( HWSerial.Query.responseA.c_str(), nullptr, 10 );
+		Read.countA	   = static_cast<int32_t>( cnt );
+		Read.angleDegA = degrees( Read.countA * 2.0f * M_PI / 4096 );
 		// dataHandle.getData()->PrintDebug( "GetCount[A]: " + String( shared->Amplifier.encoderMeasuredCountA ) );
 	}
 	// GetCurrent
@@ -577,7 +625,9 @@ void AmplifierClass::HWSERIAL_ParseResponseB() {
 	}
 	// GetEncoderCount
 	else if ( HWSerial.Query.outgoingNextB == HWSerial.Ascii.getEncoderCount ) {
-		Read.countB = response.toInt();
+		const long cnt = strtol( HWSerial.Query.responseB.c_str(), nullptr, 10 );
+		Read.countB	   = static_cast<int32_t>( cnt );
+		Read.angleDegB = degrees( Read.countB * 2.0f * M_PI / 4096 );
 		// dataHandle.getData()->PrintDebug( "GetCount[A]: " + String( shared->Amplifier.encoderMeasuredCountA ) );
 	}
 	// GetCurrent
@@ -626,7 +676,9 @@ void AmplifierClass::HWSERIAL_ParseResponseC() {
 	}
 	// GetEncoderCount
 	else if ( HWSerial.Query.outgoingNextC == HWSerial.Ascii.getEncoderCount ) {
-		Read.countC = response.toInt();
+		const long cnt = strtol( HWSerial.Query.responseC.c_str(), nullptr, 10 );
+		Read.countC	   = static_cast<int32_t>( cnt );
+		Read.angleDegC = degrees( Read.countC * 2.0f * M_PI / 4096 );
 		// dataHandle.getData()->PrintDebug( "GetCount[A]: " + String( shared->Amplifier.encoderMeasuredCountA ) );
 	}
 	// GetCurrent
@@ -770,4 +822,33 @@ int32_t AmplifierClass::READ_GetCountB() {
 int32_t AmplifierClass::READ_GetCountC() {
 
 	return Read.countC;
+}
+
+
+
+/**
+ * @brief Gets the encoder count from motor A
+ * @return float encoder count in degrees
+ */
+float AmplifierClass::READ_GetAngleDegA() {
+
+	return Read.angleDegA;
+}
+
+/**
+ * @brief Gets the encoder count from motor B
+ * @return float encoder count in degrees
+ */
+float AmplifierClass::READ_GetAngleDegB() {
+
+	return Read.angleDegB;
+}
+
+/**
+ * @brief Gets the encoder count from motor C
+ * @return float encoder count in degrees
+ */
+float AmplifierClass::READ_GetAngleDegC() {
+
+	return Read.angleDegC;
 }

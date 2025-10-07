@@ -5,12 +5,16 @@
 // Constructor
 SerialInterfaceClass::SerialInterfaceClass( AmplifierClass& amp, EncoderClass& enc )
 	: Amplifier( amp )
-	, Encoders( enc ) {
-	Serial.begin( 9600 );
-	Serial.println( "Starting serial interface..." );
-	delay( 500 );
-}
+	, Encoders( enc ) { }
 
+
+void SerialInterfaceClass::Begin() {
+
+	Serial.begin( 9600 );
+	Serial.println() ; 
+	Serial.println( F( "Software serial initialization...             success!" ) );
+	delay( 250 );
+}
 
 /**
  * @brief Function that gets called every loop to update serial interface
@@ -145,14 +149,20 @@ void SerialInterfaceClass::DisplaySerialInterface() {
 	}
 
 	// Motor encoders
-	if ( Elements.showMotorEncoder ) {
-		ShowElement_MotorEncoders();
+	if ( Elements.showMotorEncoderCounts ) {
+		ShowElement_MotorEncoderCounts();
 	}
 
-    // Baud rates
-    if ( Elements.showBaudRates ) { 
-        ShowElement_BaudRate(); 
-    }
+
+	// Motor encoders
+	if ( Elements.showMotorEncoderDegrees ) {
+		ShowElement_MotorEncoderAngles();
+	}
+
+	// Baud rates
+	if ( Elements.showBaudRates ) {
+		ShowElement_BaudRate();
+	}
 }
 
 
@@ -176,7 +186,7 @@ void SerialInterfaceClass::DisplaySerialInterface() {
 void SerialInterfaceClass::ShowElement_PlatformEncoders() {
 
 	// Display encoder output
-	Serial.print( F( "Platform Encoders " ) );
+	Serial.print( F( "Platform Encoders [DEG] " ) );
 	Serial.print( F( "x: " ) );
 	Serial.print( Encoders.GetHorizontalAngleDeg() );
 	Serial.print( F( " deg,  " ) );
@@ -189,12 +199,12 @@ void SerialInterfaceClass::ShowElement_PlatformEncoders() {
 
 
 /**
-  * @brief Show motor encoder values
+  * @brief Show raw motor encoder values
   */
-void SerialInterfaceClass::ShowElement_MotorEncoders() {
+void SerialInterfaceClass::ShowElement_MotorEncoderCounts() {
 
 	// Display encoder output
-	Serial.print( F( "Motor Encoder Counts " ) );
+	Serial.print( F( "Motor Encoder [COUNTS] " ) );
 	Serial.print( F( "A: " ) );
 	Serial.print( Amplifier.READ_GetCountA() );
 	Serial.print( F( ", B: " ) );
@@ -205,6 +215,22 @@ void SerialInterfaceClass::ShowElement_MotorEncoders() {
 }
 
 
+/**
+  * @brief Show motor encoder angle values
+  */
+void SerialInterfaceClass::ShowElement_MotorEncoderAngles() {
+
+	// Display encoder output
+	Serial.print( F( "Motor Encoder Angles [DEG] " ) );
+	Serial.print( F( "A: " ) );
+	Serial.print( Amplifier.Read.angleDegA );
+	Serial.print( F( ", B: " ) );
+	Serial.print( Amplifier.READ_GetAngleDegB() );
+	Serial.print( F( ", C: " ) );
+	Serial.print( Amplifier.READ_GetAngleDegC() );
+	Serial.println();
+}
+
 
 /**
   * @brief Show amplifier baud rates
@@ -212,9 +238,12 @@ void SerialInterfaceClass::ShowElement_MotorEncoders() {
 void SerialInterfaceClass::ShowElement_BaudRate() {
 
 	// Display encoder output
-	Serial.print( F( "Amplifier Baud Rate " ) );
+	Serial.print( F( "Amplifier Baud Rates [BPS]" ) );
 	Serial.print( F( "A: " ) );
 	Serial.print( Amplifier.HWSerial.AmpProperty.baudRateA );
-
+	Serial.print( F( ", B: " ) );
+	Serial.print( Amplifier.HWSerial.AmpProperty.baudRateB );
+	Serial.print( F( ", C: " ) );
+	Serial.print( Amplifier.HWSerial.AmpProperty.baudRateC );
 	Serial.println();
 }

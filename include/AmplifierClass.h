@@ -97,15 +97,15 @@ struct AmpCommandStruct {
  */
 struct ReadValuesStruct {
 
-	int16_t currentA  = 0;		 // Measured current
-	int16_t currentB  = 0;		 // Measured current
-	int16_t currentC  = 0;		 // Measured current
-	int32_t countA	  = 0;		 // Encoder count
-	int32_t countB	  = 0;		 // Encoder count
-	int32_t countC	  = 0;		 // Encoder count
-	float	angleDegA = 0.0f;	 // Angle in degrees
-	float	angleDegB = 0.0f;	 // Angle in degrees
-	float	angleDegC = 0.0f;	 // Angle in degrees
+	int16_t currentA  = 0;	  // Measured current
+	int16_t currentB  = 0;	  // Measured current
+	int16_t currentC  = 0;	  // Measured current
+	int32_t countA	  = 0;	  // Encoder count
+	int32_t countB	  = 0;	  // Encoder count
+	int32_t countC	  = 0;	  // Encoder count
+	int32_t angleDegA = 0;	  // Angle in degrees
+	int32_t angleDegB = 0;	  // Angle in degrees
+	int32_t angleDegC = 0;	  // Angle in degrees
 };
 
 /**
@@ -169,51 +169,56 @@ class AmplifierClass {
 	AmplifierClass( AmplifierClass&& )				   = delete;
 	AmplifierClass& operator=( AmplifierClass&& )	   = delete;
 
-	/************
-	*  Updates  *
-	*************/
+	/***********
+	*  Timing  *
+	************/
 	private:
-	uint16_t	  timerHWSerialFrequencyHz = 10;	// Frequency to display timer outputs
+	uint16_t	  timerHWSerialFrequencyHz = 60;	// Frequency to display timer outputs
 	elapsedMillis timerRuntimeMillis;				// Running timer in milliseconds
+
+
+	/**************
+	*  Accessors  *
+	***************/
 	public:
 	void Update();	  // Update (called every loop)
+	void Begin();	  // Initialize class
 
 	/*************************************
 	*  Amplifier Configuration Elements  *
 	**************************************/
 	private:
-	void   CONFIGURE_ConfigurePins();				  // Configure and initialize hardware pins
-	void   CONFIGURE_ConfigureHWSerialInterface();	  // Configure and initialize hardware serial
-	int8_t PIN_AMPLIFIER_ENABLE_A = 35;				  // Enables amplfier A (and corresponding LED)
-	int8_t PIN_AMPLIFIER_ENABLE_B = 34;				  // Enables amplfier B (and corresponding LED)
-	int8_t PIN_AMPLIFIER_ENABLE_C = 33;				  // Enables amplfier C (and corresponding LED)
-	int8_t PIN_AMPLIFIER_PWM_A	  = 7;				  // Sends PWM commands to amplifier A
-	int8_t PIN_AMPLIFIER_PWM_B	  = 8;				  // Sends PWM commands to amplifier B
-	int8_t PIN_AMPLIFIER_PWM_C	  = 25;				  // Sends PWM commands to amplifier C
-	int8_t PIN_AMPLIFIER_LED_A	  = 30;				  // Serial interface LED
-	int8_t PIN_AMPLIFIER_LED_B	  = 31;				  // Serial interface LED
-	int8_t PIN_AMPLIFIER_LED_C	  = 32;				  // Serial interface LED
-	int8_t PIN_AMPLIFIER_SAFETY	  = 9;				  // Safety switch input (can be overriden on control board as well)
+	void   CONFIGURE_ConfigurePins();	   // Configure and initialize hardware pins
+	int8_t PIN_AMPLIFIER_ENABLE_A = 35;	   // Enables amplfier A (and corresponding LED)
+	int8_t PIN_AMPLIFIER_ENABLE_B = 34;	   // Enables amplfier B (and corresponding LED)
+	int8_t PIN_AMPLIFIER_ENABLE_C = 33;	   // Enables amplfier C (and corresponding LED)
+	int8_t PIN_AMPLIFIER_PWM_A	  = 7;	   // Sends PWM commands to amplifier A
+	int8_t PIN_AMPLIFIER_PWM_B	  = 8;	   // Sends PWM commands to amplifier B
+	int8_t PIN_AMPLIFIER_PWM_C	  = 25;	   // Sends PWM commands to amplifier C
+	int8_t PIN_AMPLIFIER_LED_A	  = 30;	   // Serial interface LED
+	int8_t PIN_AMPLIFIER_LED_B	  = 31;	   // Serial interface LED
+	int8_t PIN_AMPLIFIER_LED_C	  = 32;	   // Serial interface LED
+	int8_t PIN_AMPLIFIER_SAFETY	  = 9;	   // Safety switch input (can be overriden on control board as well)
 
-	/*******************************
-	*  Amplifier Command Elements  *
-	********************************/
+	/*********************
+	*  Command Elements  *
+	**********************/
 	AmpCommandStruct Command;	 // Struct of command elements
 	private:
 	void COMMAND_SetZeroOutput();													 // Send zero output to PWM
 	void COMMAND_SendCommandedPWM( uint16_t pwmA, uint16_t pwmB, uint16_t pwmC );	 // Send commanded PWM value to amplifiers
+	void COMMAND_Reset();															 // Reset amplifiers
 	public:
 	void COMMAND_Disable();																	   // Disable amplifiers
 	void COMMAND_Enable();																	   // Enable amplifiers
-	void COMMAND_Reset();																	   // Reset amplifiers
 	void COMMAND_DrivePolarRT( int8_t percentageR, float theta );							   // Drive amplifier using polar coordinates
 	void COMMAND_DriveCoordXY( int8_t percentageX, int8_t percentageY );					   // Drive amplifiers through XY commands
 	void COMMAND_DriveABC( uint8_t percentageA, uint8_t percentageB, uint8_t percentageC );	   // Drive amplifiers through ABC commands
 	void COMMAND_SetTension( uint8_t tensionPercentage );									   // Set the tension to the given percentage
 
-	/*****************************
-	*  Amplifier State Elements  *
-	******************************/
+	/*******************
+	*  State Elements  *
+	********************/
 	AmplifierFlagsStruct Flags;	   // Struct of amplifier state elements
 	public:
 	bool   FLAGS_GetAmplifierState();		// Get the amplifier state
@@ -240,8 +245,14 @@ class AmplifierClass {
 	void HWSERIAL_ParseResponseA();						 // Parse response to query A
 	void HWSERIAL_ParseResponseB();						 // Parse response to query B
 	void HWSERIAL_ParseResponseC();						 // Parse response to query C
+	void HWSERIAL_SetPwmCurrentMode();					 // Reset amplifiers into pwm current-control mode
+	void HWSERIAL_InitializeHardwareSerial();			 // Initialize hardware serial interface
+	void HWSERIAL_SetEncodersZero();					 // Set motor encoders to zero
+
+
 	public:
-	void HWSERIAL_SetPwmCurrentMode();	  // Reset amplifiers into pwm current-control mode
+	// None
+
 
 	/*************************
  	*  Read Values Elements  *
@@ -252,12 +263,15 @@ class AmplifierClass {
 	void READ_Currents();	  // Read current values via serial
 	void READ_BaudRates();	  // Read baud rates
 	public:
-	int32_t READ_GetCountA();	   // Encoder count
-	int32_t READ_GetCountB();	   // Encoder count
-	int32_t READ_GetCountC();	   // Encoder count
-	int16_t READ_GetCurrentA();	   // Current measurement
-	int16_t READ_GetCurrentB();	   // Current measurement
-	int16_t READ_GetCurrentC();	   // Current measurement
+	int32_t READ_GetCountA();		// Encoder count
+	int32_t READ_GetCountB();		// Encoder count
+	int32_t READ_GetCountC();		// Encoder count
+	int16_t READ_GetCurrentA();		// Current measurement
+	int16_t READ_GetCurrentB();		// Current measurement
+	int16_t READ_GetCurrentC();		// Current measurement
+	float	READ_GetAngleDegA();	// Encoder angle in degrees
+	float	READ_GetAngleDegB();	// Encoder angle in degrees
+	float	READ_GetAngleDegC();	// Encoder angle in degrees
 
 	/*************************
  	*  Read Values Elements  *

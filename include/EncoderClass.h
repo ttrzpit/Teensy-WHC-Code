@@ -17,12 +17,21 @@
 
 class EncoderClass {
 
+	/*****************
+	*  Constructors  *
+	******************/
+	public:
+	EncoderClass();	   // Default constructor and safeguards to prevent multiple amplifier instances
+	EncoderClass( const EncoderClass& )			   = delete;
+	EncoderClass& operator=( const EncoderClass& ) = delete;
+	EncoderClass( EncoderClass&& )				   = delete;
+	EncoderClass& operator=( EncoderClass&& )	   = delete;
 
-private:
-	// Initialize class
-	void ConfigurePins();	  // Initialize Teensy pins
-
-	// Encoder pins
+	/******************
+	*  Configuration  *
+	*******************/
+	private:
+	void   ConfigurePins();			  // Initialize Teensy pins
 	int8_t PIN_ENCODER_HOR_A = 10;	  // Horizontal encoder A channel
 	int8_t PIN_ENCODER_HOR_B = 11;	  // Horizontal encoder B channel
 	int8_t PIN_ENCODER_HOR_X = 12;	  // Horizontal encoder X channel
@@ -30,30 +39,29 @@ private:
 	int8_t PIN_ENCODER_VER_B = 5;	  // Vertical encoder B channel
 	int8_t PIN_ENCODER_VER_X = 6;	  // Vertical encoder X channel
 
-	// Local variables
+	/**************
+	*  Accessors  *
+	***************/
+	public:
+	void  Begin();					  // Initializes class
+	void  Update();					  // Run every loop
+	float GetHorizontalAngleDeg();	  // Get horizontal angle in degrees
+	float GetVerticalAngleDeg();	  // Get vertical angle in degrees
+	void  ZeroEncoders();			  // Zero encoder values
+	private:
+	void PollEncoders();	// Poll encoder values
+
+
+	/*********************
+	*  Encoder Elements  *
+	**********************/
+	private:
 	int64_t horizontalCountOld	   = 0;		  // Previous horizontal encoder count [COUNTS]
 	int64_t horizontalCountNew	   = 0;		  // New horizontal encoder count [COUNTS]
 	int64_t verticalCountOld	   = 0;		  // Previous vertical encoder count [COUNTS]
 	int64_t verticalCountNew	   = 0;		  // New vertical encoder count [COUNTS]
 	float	horizontalAngleDegrees = 0.0f;	  // Horizontal encoder angle [DEG]
 	float	verticalAngleDegrees   = 0.0f;	  // Vertical encoder angle [DEG]
-
-	// Encoder objects
-	Encoder encoderHorizontal;
-	Encoder encoderVertical;
-
-
-public:
-	// Default constructor and safeguards to prevent multiple amplifier instances
-	EncoderClass();
-	EncoderClass( const EncoderClass& )			   = delete;
-	EncoderClass& operator=( const EncoderClass& ) = delete;
-	EncoderClass( EncoderClass&& )				   = delete;
-	EncoderClass& operator=( EncoderClass&& )	   = delete;
-
-	// Public functions
-	void  PollEncoders();
-	float GetHorizontalAngleDeg();
-	float GetVerticalAngleDeg();
-	void  ZeroEncoders();
+	Encoder encoderHorizontal;				  // Horizontal encoder objects
+	Encoder encoderVertical;				  // Vertical encoder objects
 };

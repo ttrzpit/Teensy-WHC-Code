@@ -4,16 +4,34 @@
  * @brief Construct a new Gamepad Class:: Gamepad Class object
  * 
  */
-GamepadClass::GamepadClass() {
+GamepadClass::GamepadClass() { }
+
+
+/**
+ * @brief Begin an initialize class
+ * 
+ */
+void GamepadClass::Begin() {
 
 	// Initialize hardware IO
 	ConfigurePins();
 
 	// Initialize threshold array values
 	InitializeThresholdArrays();
+
+	delay( 250 );
+	Serial.println( F( "Platform gamepad initialization...            success!" ) );
 }
 
 
+/**
+ * @brief Called by main
+ */
+void GamepadClass::Update() {
+
+	// Poll buttons and process analog data
+	PollButtons();
+}
 
 /**
  * @brief Return the cardinal direction, clockwise from Up
@@ -182,9 +200,40 @@ void GamepadClass::MapButtonValues() {
 	} else if ( diagonalStateValue != -1 ) {
 		combinedStateValue	= diagonalStateValue * 2 + 1;
 		combinedStateString = diagonalStateString;
+	} else if ( buttonStateValue != -1 ) {
+		combinedStateValue	= buttonStateValue + 8;
+		combinedStateString = buttonStateString;
 	} else {
-        // Nothing
+		combinedStateValue	= -1;
+		combinedStateString = "";
 	}
+
+	// Debounce check
+	static int8_t lastRawState	  = -1;
+	int8_t		  currentRawState = combinedStateValue;
+
+	if ( currentRawState == lastRawState ) {
+		debounceCounter++;
+		if ( debounceCounter >= debounceLimit ) {
+
+			// Stable reading
+			if ( currentRawState != lastStableState ) {
+				lastStableState = currentRawState;
+
+				// Edge detection
+				if ( lastStableState != -1 ) {
+					combinedStateValue = lastStableState;
+					Serial.print( "Button: " );
+					Serial.print( combinedStateValue );
+					Serial.print( " , " );
+					Serial.println( combinedStateString );
+				}
+			}
+		}
+	} else {
+		debounceCounter = 0;
+	}
+	lastRawState = currentRawState;
 }
 
 

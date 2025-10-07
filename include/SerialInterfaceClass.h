@@ -34,10 +34,11 @@
 struct DisplayElementsStruct {
 
 	// Flags to toggle in display
-	bool showPlatformEncoder = false;
-	bool showMotorEncoder	 = false;
-	bool showMotorName		 = false;
-	bool showBaudRates		 = false;
+	bool showPlatformEncoder	 = false;
+	bool showMotorEncoderCounts	 = false;
+	bool showMotorEncoderDegrees = false;
+	bool showMotorName			 = false;
+	bool showBaudRates			 = false;
 };
 
 
@@ -55,10 +56,17 @@ class SerialInterfaceClass {
 	public:
 	// Default constructor
 	explicit SerialInterfaceClass( AmplifierClass& amp, EncoderClass& enc );	// Constructor
-	void Update();																// Displays serial port text and reads inputs
+
 	private:
 	AmplifierClass& Amplifier;	  // Stored reference
 	EncoderClass&	Encoders;
+
+	/**************
+	*  Accessors  *
+	***************/
+	public:
+	void Update();	  // Displays serial port text and reads inputs
+	void Begin();	  // Initialize class
 
 	/*******************
 	*  Debugging Info  *
@@ -86,7 +94,8 @@ class SerialInterfaceClass {
 	/*********************
 	*  Display Elements  *
 	**********************/
-	void ShowElement_PlatformEncoders();	// Show the platform encoder values
-	void ShowElement_MotorEncoders();		// Show motor encoder values
-	void ShowElement_BaudRate();			// Show encoder baud rat
+	void ShowElement_PlatformEncoders();	  // Show the platform encoder values
+	void ShowElement_MotorEncoderCounts();	  // Show motor encoder values
+	void ShowElement_MotorEncoderAngles();	  // Show motor encoder values
+	void ShowElement_BaudRate();			  // Show encoder baud rat
 };
