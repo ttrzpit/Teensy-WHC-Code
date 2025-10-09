@@ -14,12 +14,6 @@
 #include <SPI.h>		// For SD card access
 
 
-// Forward declarations
-class AmplifierClass;
-class EncoderClass;
-class GamepadClass;
-
-
 
 class LoggingClass {
 
@@ -28,12 +22,8 @@ class LoggingClass {
 	******************/
 	public:
 	// Default constructor
-	explicit LoggingClass( AmplifierClass& amp, EncoderClass& enc, GamepadClass& gpad );	// Constructor
+	explicit LoggingClass();	// Constructor
 
-	private:
-	AmplifierClass& Amplifier;	  // Stored reference to amplifiers
-	EncoderClass&	Encoders;	  // Stored reference to encoders
-	GamepadClass&	Gamepad;	  // Stored reference to gamepad
 
 
 	/**************

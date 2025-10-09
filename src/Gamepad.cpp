@@ -1,4 +1,4 @@
-#include "GamepadClass.h"
+#include "Gamepad.h"
 
 /**
  * @brief Construct a new Gamepad Class:: Gamepad Class object
@@ -20,17 +20,22 @@ void GamepadClass::Begin() {
 	InitializeThresholdArrays();
 
 	delay( 250 );
-	Serial.println( F( "Platform gamepad initialization...            success!" ) );
+	Serial.println( F( "Platform gamepad initialization...            Success!" ) );
 }
 
 
 /**
  * @brief Called by main
  */
-void GamepadClass::Update() {
+void GamepadClass::Update( bool& isPressed, int8_t& buttonIndex, String& buttonName ) {
 
 	// Poll buttons and process analog data
 	PollButtons();
+
+	// Update button index and name
+	isPressed	= isNewStateReady;
+	buttonIndex = combinedStateValue;
+	buttonName	= combinedStateString;
 }
 
 /**
@@ -212,6 +217,8 @@ void GamepadClass::MapButtonValues() {
 	static int8_t lastRawState	  = -1;
 	int8_t		  currentRawState = combinedStateValue;
 
+	isNewStateReady = false;
+
 	if ( currentRawState == lastRawState ) {
 		debounceCounter++;
 		if ( debounceCounter >= debounceLimit ) {
@@ -222,11 +229,14 @@ void GamepadClass::MapButtonValues() {
 
 				// Edge detection
 				if ( lastStableState != -1 ) {
+					
 					combinedStateValue = lastStableState;
-					Serial.print( "Button: " );
-					Serial.print( combinedStateValue );
-					Serial.print( " , " );
-					Serial.println( combinedStateString );
+					isNewStateReady	   = true;
+					// Serial.print( "IN CLASS Button: " );
+					// Serial.print( combinedStateValue );
+					// Serial.print( " , " );
+					// Serial.println( combinedStateString );
+				} else {
 				}
 			}
 		}

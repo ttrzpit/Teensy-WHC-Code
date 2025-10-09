@@ -47,7 +47,7 @@ struct DisplayElementsStruct {
 class AmplifierClass;
 class EncoderClass;
 
-class SerialInterfaceClass {
+class KeyboardInterfaceClass {
 
 
 	/************************
@@ -55,18 +55,14 @@ class SerialInterfaceClass {
 	*************************/
 	public:
 	// Default constructor
-	explicit SerialInterfaceClass( AmplifierClass& amp, EncoderClass& enc );	// Constructor
-
-	private:
-	AmplifierClass& Amplifier;	  // Stored reference
-	EncoderClass&	Encoders;
+	explicit KeyboardInterfaceClass();	  // Constructor
 
 	/**************
 	*  Accessors  *
 	***************/
 	public:
-	void Update();	  // Displays serial port text and reads inputs
-	void Begin();	  // Initialize class
+	void Update( const char*& buffer );	   // Displays serial port text and reads inputs
+	void Begin( uint16_t freq );		   // Initialize class
 
 	/*******************
 	*  Debugging Info  *
@@ -76,16 +72,16 @@ class SerialInterfaceClass {
 	*  Keyboard Input  *
 	********************/
 	private:
-	char	inputCommandBuffer[8];					   // Buffer to store incoming commands
-	uint8_t inputCommandIndex = 0;					   // Current read buffer index
-	void	ReadSerialInput();						   // Read serial inputs
-	void	ParseSerialInput( const char* buffer );	   // Process serial input
+	char inputCommandBuffer[8];	  // Buffer to store incoming commands
+	uint8_t		inputCommandIndex = 0;	  // Current read buffer index
+	const char* ReadSerialInput();		  // Read serial inputs
+	// void		ParseSerialInput( const char* buffer );	   // Process serial input
 
 	/******************
 	*  Serial Output  *
 	*******************/
 	private:
-	uint16_t	  timerFrequencyHz = 1;		   // Frequency to display timer outputs
+	uint16_t	  timerFrequencyHz = 10;	   // Frequency to display timer outputs
 	elapsedMillis timerRuntimeMillis;		   // Running timer in milliseconds
 	void		  DisplaySerialInterface();	   // Shows the serial interface
 	public:

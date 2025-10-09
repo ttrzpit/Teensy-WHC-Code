@@ -1,62 +1,103 @@
-#include "AmplifierClass.h"
+#include "Amplifier.h"
 
 AmplifierClass::AmplifierClass() { }
 
 
+/**
+ * @brief Initialize the amplifier
+ * 
+ * @param newFreqPWMDriverHz Frequency to drive PWM signal at
+ * @param newFreqHWSerialHz Frequency to read HW serial at
+ */
+void AmplifierClass::Begin( uint16_t newFreqPWMDriverHz, uint16_t newFreqHWSerialHz ) {
 
-void AmplifierClass::Begin() {
+	// Update frequencies
+	freqPWMDriverHz = newFreqPWMDriverHz;
+	freqHWSerialHz	= newFreqHWSerialHz;
 
-	// Do not modify the order of the items below
+	// Configure hardware IO (pinMode, initial pin state, set analog resolution)
 	CONFIGURE_ConfigurePins();
 
-	// Initialize amps baud at 9600
+
+	// Zero analog output
+	COMMAND_SetZeroOutput();
+
+	// // Reset to clear settings
+	COMMAND_Reset();
+	delay( 1500 );
+
+
+	// Initialize hardware serial to amplifiers
 	HWSERIAL_InitializeHardwareSerial();
 
-	// Configure amps for current control mode
-	HWSERIAL_SetPwmCurrentMode();
+	// Configure amplifier for PWM current-control (resets, sends current mode command)
+	// HWSERIAL_SetPwmCurrentMode();
 
-	// Reset encoder value
-	HWSERIAL_SetEncodersZero();
+	// Increase hardware serial speed
+	HWSERIAL_IncreaseHardwareSerialSpeed();
 
-	delay( 250 );
-	Serial.println( F( "Amplifier initialization...                   success!" ) );
+	// Get amplifier names
+	// HWSERIAL_GetAmplifierNames();
+
+	// Configure IO
+	// Disable
+	// Zero output
+	// HWSerial
+	// Baud update
+	// Current Mode
+
+
+
+	// Enable amplifier
+	// COMMAND_Enable();
+
+	delay( 500 );	 // Allow boot sequence to settle
+
+	Serial.println( F( "Amplifier initialization...                   Success!" ) );
 }
+
+
 
 /**
  * @brief Function that gets called every loop to update serial interface
  * 
  */
-void AmplifierClass::Update() {
+void AmplifierClass::UpdatePWM() {
+
+	// Check safety switch
+	FLAGS_GetSafetySwitchState();
+
+	// Send signals
+	COMMAND_SendCommandedPWM();
+}
+
+
+void AmplifierClass::UpdateEncoders() {
+
+	// Read Encoders
+	// READ_Encoders();
+	// phiA = Read.angleDegA;
+	// phiB = Read.angleDegB;
+	// phiC = Read.angleDegC;
+
 
 
 	// Callback to HWSerialA
-	HWSERIAL_ProcessQueryA();
+	HWSERIAL_PushQueryA();
 	if ( HWSerialA.available() ) {
 		HWSERIAL_ReadQueryResponseA();
 	}
 
 	// Callback to HWSerialB
-	HWSERIAL_ProcessQueryB();
+	HWSERIAL_PushQueryB();
 	if ( HWSerialB.available() ) {
 		HWSERIAL_ReadQueryResponseB();
 	}
 
 	// Callback to HWSerialC
-	HWSERIAL_ProcessQueryC();
+	HWSERIAL_PushQueryC();
 	if ( HWSerialC.available() ) {
 		HWSERIAL_ReadQueryResponseC();
-	}
-
-
-
-	// Display output if timer ticks over
-	if ( timerRuntimeMillis >= ( 1000 / timerHWSerialFrequencyHz ) ) {
-
-		// Reset timer
-		timerRuntimeMillis = 0;
-
-		// Read Encoders
-		READ_Encoders();
 	}
 }
 
@@ -80,31 +121,208 @@ void AmplifierClass::Update() {
 
 /**
  * @brief Configures the hardware serial interface with the amplifiers
- * 
  */
 void AmplifierClass::HWSERIAL_InitializeHardwareSerial() {
 
-	// Add delay to allow serial monitor to open
-	digitalWriteFast( PIN_AMPLIFIER_LED_A, LOW );
-	digitalWriteFast( PIN_AMPLIFIER_LED_B, LOW );
-	digitalWriteFast( PIN_AMPLIFIER_LED_C, LOW );
+	Serial.println( "Entering HWSERIAL_InitializeHardwareSerial" );
+	// Clear states
+	HWSerialA.clear();
+	HWSerialB.clear();
+	HWSerialC.clear();
+	// HWSerialA.flush();
+	// HWSerialB.flush();
+	// HWSerialC.flush();
 
 	// Establish hardware serial connection amp A
 	HWSerialA.begin( 9600 );
-	digitalWriteFast( PIN_AMPLIFIER_LED_A, HIGH );
 	delay( 100 );
+	HWSerialA.clear();
+	// HWSerialA.flush();
+	digitalWriteFast( PIN_AMPLIFIER_LED_A, HIGH );
 
 	// Establish hardware serial connection amp B
 	HWSerialB.begin( 9600 );
-	digitalWriteFast( PIN_AMPLIFIER_LED_B, HIGH );
 	delay( 100 );
+	HWSerialB.clear();
+	// HWSerialB.flush();
+	digitalWriteFast( PIN_AMPLIFIER_LED_B, HIGH );
 
 	// Establish hardware serial connection amp C
 	HWSerialC.begin( 9600 );
+	delay( 100 );
+	HWSerialC.clear();
+	// HWSerialC.flush();
 	digitalWriteFast( PIN_AMPLIFIER_LED_C, HIGH );
+
+	// Get baud rates to confirm
+	HWSERIAL_GetAmplifierBaudRates();
+
+	Serial.println( "HWSERIAL_InitializeHardwareSerial complete" );
+}
+
+
+
+bool AmplifierClass::HWSERIAL_WaitForPortA(uint32_t ms) {
+    const uint32_t t0 = millis();
+    while (HWSerial.isAwaitingResponseA) {
+        if (HWSerialA.available()) {
+            HWSERIAL_ReadQueryResponseA();   // make sure this parses on '\r' OR '\n'
+        } else if (millis() - t0 > ms) {
+            HWSerial.isAwaitingResponseA = false;   // timeout: bail cleanly
+			// HWSerialA.clear(); 
+            return false;
+        }
+        yield();
+    }
+    return true;
+}
+
+bool AmplifierClass::HWSERIAL_WaitForPortB(uint32_t ms) {
+    const uint32_t t0 = millis();
+    while (HWSerial.isAwaitingResponseB) {
+        if (HWSerialB.available()) {
+            HWSERIAL_ReadQueryResponseB();
+        } else if (millis() - t0 > ms) {
+            HWSerial.isAwaitingResponseB = false;
+			// HWSerialB.clear(); 
+            return false;
+        }
+        yield();
+    }
+    return true;
+}
+
+bool AmplifierClass::HWSERIAL_WaitForPortC(uint32_t ms) {
+    const uint32_t t0 = millis();
+    while (HWSerial.isAwaitingResponseC) {
+        if (HWSerialC.available()) {
+            HWSERIAL_ReadQueryResponseC();
+        } else if (millis() - t0 > ms) {
+            HWSerial.isAwaitingResponseC = false;
+			// HWSerialC.clear(); 
+            return false;
+        }
+        yield();
+    }
+    return true;
+}
+
+/**
+ * @brief Update hardware serial speed to 115237
+ */
+void AmplifierClass::HWSERIAL_IncreaseHardwareSerialSpeed() {
+
+	Serial.println( "Entering HWSERIAL_IncreaseHWSerialSPeed " );
+
+	HWSerialA.clear();
+	HWSerialB.clear();
+	HWSerialC.clear();
+	HWSerialA.flush();
+	HWSerialB.flush();
+	HWSerialC.flush();
+
+	// Send speed update cues
+	HWSERIAL_EnqueueQueryA( HWSerial.Ascii.setBaud115237 );
 	delay( 100 );
 
-	Serial.println( F( "Amplifier HWSerial initialization...          success!" ));
+	// Push queries out
+	HWSERIAL_PushQueryA();
+	HWSerial.isAwaitingResponseA = false;
+	delay( 300 );
+
+	// // Wait for responses before proceeding
+	// while ( HWSerial.isAwaitingResponseA ) {
+	// 	Serial.println( "WhileA " );
+	// 	if ( HWSerialA.available() ) {
+	// 		Serial.println( "AvailA" );
+	// 		HWSERIAL_ReadQueryResponseA();
+	// 	} else if ( !HWSerialA.available() ) {
+	// 		Serial.println( "!AvailA" );
+	// 	}
+	// }
+
+	HWSERIAL_EnqueueQueryB( HWSerial.Ascii.setBaud115237 );
+	delay( 100 );
+
+	HWSERIAL_PushQueryB();
+	delay( 300 );
+	HWSerial.isAwaitingResponseB = false;
+
+	// while ( HWSerial.isAwaitingResponseB ) {
+	// 	Serial.println( "WhileB " );
+	// 	if ( HWSerialB.available() ) {
+	// 		Serial.println( "AvailB" );
+	// 		HWSERIAL_ReadQueryResponseB();
+	// 	} else if ( !HWSerialB.available() ) {
+	// 		Serial.println( "!AvailB" );
+	// 	}
+	// }
+	// delay( 500 );
+
+
+	HWSERIAL_EnqueueQueryC( HWSerial.Ascii.setBaud115237 );
+	delay( 100 );
+
+	HWSERIAL_PushQueryC();
+	delay( 300 );
+	HWSerial.isAwaitingResponseC = false;
+
+	// while ( HWSerial.isAwaitingResponseC ) {
+	// 	Serial.println( "WhileC " );
+	// 	if ( HWSerialC.available() ) {
+	// 		Serial.println( "AvailC" );
+	// 		HWSERIAL_ReadQueryResponseC();
+	// 	} else if ( !HWSerialC.available() ) {
+	// 		Serial.println( "!AvailC" );
+	// 	}
+	// }
+	// delay( 500 );
+
+	// Push queries and wait for response
+	// HWSERIAL_PushAllAndWaitForResponses();
+
+
+	// Close serial connections
+	HWSerialA.end();
+	HWSerialB.end();
+	HWSerialC.end();
+	Serial.println( "HWSerial ended" );
+	delay( 300 );
+
+
+	// HWSerialA.flush();
+	// HWSerialB.flush();
+	// HWSerialC.flush();
+
+
+	// Re-connect with faster  serial connection
+	HWSerialA.begin( 115237 );
+	delay( 100 );
+	HWSerialA.clear();
+	HWSerialA.flush();
+	HWSerialB.begin( 115237 );
+	delay( 100 );
+	HWSerialB.clear();
+	HWSerialB.flush();
+	HWSerialC.begin( 115237 );
+	delay( 100 );
+	HWSerialC.clear();
+	HWSerialC.flush();
+	Serial.println( "HWSerial began" );
+
+	// Push queries and wait for response
+	// HWSERIAL_PushAllAndWaitForResponses();
+	//
+
+	// Get baud rates
+	HWSERIAL_GetAmplifierBaudRates();
+
+	// Push queries and wait for response
+	// HWSERIAL_PushAllAndWaitForResponses();
+
+	Serial.print( "DEBUG: IncreaseHWSerialSPeed Start  -->  " );
+
+	Serial.println( F( "Amplifier HWSerial speed increase...          Success!" ) );
 }
 
 
@@ -125,21 +343,19 @@ void AmplifierClass::CONFIGURE_ConfigurePins() {
 	pinMode( PIN_AMPLIFIER_LED_A, OUTPUT );
 	pinMode( PIN_AMPLIFIER_LED_B, OUTPUT );
 	pinMode( PIN_AMPLIFIER_LED_C, OUTPUT );
-	pinMode( PIN_AMPLIFIER_SAFETY, INPUT_PULLDOWN );
 
-	// Disable amplifier output (as a safety precaution)
-	COMMAND_Disable();
-
-	// Set LED initial values
+	// Set initial pin states
+	digitalWriteFast( PIN_AMPLIFIER_ENABLE_A, LOW );
+	digitalWriteFast( PIN_AMPLIFIER_ENABLE_B, LOW );
+	digitalWriteFast( PIN_AMPLIFIER_ENABLE_C, LOW );
 	digitalWriteFast( PIN_AMPLIFIER_LED_A, LOW );
 	digitalWriteFast( PIN_AMPLIFIER_LED_B, LOW );
 	digitalWriteFast( PIN_AMPLIFIER_LED_C, LOW );
 
-	// Set analog resolution
-	analogWriteResolution( 12 );	// 12-bit (0 to 4096)
+	// Set analog write resolution
+	analogWriteResolution( 12 );	// 12-bit = 0 to 4096
 
-	// Default to zero output
-	COMMAND_SetZeroOutput();
+	Serial.println( "CONFIGURE_ConfigurePins complete" );
 }
 
 
@@ -167,18 +383,17 @@ void AmplifierClass::CONFIGURE_ConfigurePins() {
  */
 void AmplifierClass::COMMAND_Disable() {
 
-	// Set amplifier values to zero
-	COMMAND_SetZeroOutput();
-
 	// Disable ENABLE pins
 	digitalWriteFast( PIN_AMPLIFIER_ENABLE_A, LOW );
 	digitalWriteFast( PIN_AMPLIFIER_ENABLE_B, LOW );
 	digitalWriteFast( PIN_AMPLIFIER_ENABLE_C, LOW );
 
 	// Update state flags
-	Flags.isEnabledA = false;
-	Flags.isEnabledB = false;
-	Flags.isEnabledC = false;
+	Flags.isEnabled = false;
+	Serial.println( "Disable complete" );
+
+	// // Zero outputs
+	// COMMAND_SetZeroOutput();
 }
 
 
@@ -195,9 +410,7 @@ void AmplifierClass::COMMAND_Enable() {
 	digitalWriteFast( PIN_AMPLIFIER_ENABLE_C, HIGH );
 
 	// Update state flag
-	Flags.isEnabledA = true;
-	Flags.isEnabledB = true;
-	Flags.isEnabledC = true;
+	Flags.isEnabled = true;
 }
 
 
@@ -209,25 +422,24 @@ void AmplifierClass::COMMAND_Enable() {
 void AmplifierClass::COMMAND_Reset() {
 
 	// Send reset sequence to amp A
-	digitalWriteFast( PIN_AMPLIFIER_ENABLE_A, HIGH );
-	digitalWriteFast( PIN_AMPLIFIER_ENABLE_A, LOW );
+	digitalWrite( PIN_AMPLIFIER_ENABLE_A, HIGH );
+	digitalWrite( PIN_AMPLIFIER_ENABLE_A, LOW );
 	delay( 500 );
-	// Re-enable amp A
-	digitalWriteFast( PIN_AMPLIFIER_ENABLE_A, HIGH );
+	digitalWrite( PIN_AMPLIFIER_ENABLE_A, HIGH );
 
 	// Send reset sequence to amp B
-	digitalWriteFast( PIN_AMPLIFIER_ENABLE_B, HIGH );
-	digitalWriteFast( PIN_AMPLIFIER_ENABLE_B, LOW );
+	digitalWrite( PIN_AMPLIFIER_ENABLE_B, HIGH );
+	digitalWrite( PIN_AMPLIFIER_ENABLE_B, LOW );
 	delay( 500 );
-	// Re-enable amp B
-	digitalWriteFast( PIN_AMPLIFIER_ENABLE_B, HIGH );
+	digitalWrite( PIN_AMPLIFIER_ENABLE_B, HIGH );
 
 	// Send reset sequence to amp C
-	digitalWriteFast( PIN_AMPLIFIER_ENABLE_C, HIGH );
-	digitalWriteFast( PIN_AMPLIFIER_ENABLE_C, LOW );
+	digitalWrite( PIN_AMPLIFIER_ENABLE_C, HIGH );
+	digitalWrite( PIN_AMPLIFIER_ENABLE_C, LOW );
 	delay( 500 );
-	// Re-enable amp C
-	digitalWriteFast( PIN_AMPLIFIER_ENABLE_C, HIGH );
+	digitalWrite( PIN_AMPLIFIER_ENABLE_C, HIGH );
+
+	Serial.println( "COMMAND_Reset complete" );
 }
 
 
@@ -238,18 +450,55 @@ void AmplifierClass::COMMAND_Reset() {
  */
 void AmplifierClass::HWSERIAL_SetPwmCurrentMode() {
 
+	Serial.print( "DEBUG: InitializeHWSerial Start  -->  " );
+
+
 	// Reset amplifier to clear previous configurations
 	COMMAND_Reset();
+	delay( 500 );
 
 	// Send serial command to set amps into current mode
 	HWSERIAL_EnqueueQueryA( HWSerial.Ascii.setCurrentMode );
-	delay( 600 );
-	HWSERIAL_EnqueueQueryB( HWSerial.Ascii.setCurrentMode );
-	delay( 600 );
-	HWSERIAL_EnqueueQueryC( HWSerial.Ascii.setCurrentMode );
-	delay( 600 );
+	delay( 100 );
+	// HWSERIAL_ProcessQueryA();
 
-	Serial.println( F( "Amplifier current control initialization...   success!" ) );
+	HWSERIAL_EnqueueQueryB( HWSerial.Ascii.setCurrentMode );
+	delay( 100 );
+	// HWSERIAL_ProcessQueryB();
+
+	HWSERIAL_EnqueueQueryC( HWSerial.Ascii.setCurrentMode );
+	delay( 100 );
+
+	HWSERIAL_PushAllAndWaitForResponses();
+
+
+
+	// // Callback to HWSerialA
+	// HWSERIAL_PushQueryA();
+	// delay( 100 );
+	// if ( HWSerialA.available() ) {
+	// 	HWSERIAL_ReadQueryResponseA();
+	// }
+
+	// // Callback to HWSerialB
+	// HWSERIAL_PushQueryB();
+	// delay( 100 );
+	// if ( HWSerialB.available() ) {
+	// 	HWSERIAL_ReadQueryResponseB();
+	// }
+
+	// // Callback to HWSerialC
+	// HWSERIAL_PushQueryC();
+	// delay( 100 );
+	// if ( HWSerialC.available() ) {
+	// 	HWSERIAL_ReadQueryResponseC();
+	// }
+
+
+	// HWSERIAL_PushAllAndWaitForResponses();
+	Serial.println( "DEBUG: InitializeHWSerial Complete" );
+
+	Serial.println( F( "Amplifier current control initialization...   Success!" ) );
 }
 
 
@@ -260,15 +509,44 @@ void AmplifierClass::HWSERIAL_SetPwmCurrentMode() {
  */
 void AmplifierClass::HWSERIAL_SetEncodersZero() {
 
+	// // Reset responses
+	// HWSerial.isAwaitingResponseA = false;
+	// HWSerial.isAwaitingResponseB = false;
+	// HWSerial.isAwaitingResponseC = false;
+	// HWSerial.Query.responseA	 = "";
+	// HWSerial.Query.responseB	 = "";
+	// HWSerial.Query.responseC	 = "";
+	// HWSerial.Query.outgoingNextA = "";
+	// HWSerial.Query.outgoingNextB = "";
+	// HWSerial.Query.outgoingNextC = "";
+
 	// Reset amplifier to clear previous configurations
 	HWSERIAL_EnqueueQueryA( HWSerial.Ascii.setEncoderZero );
-	delay( 100 );
+	delay( 200 );
+	HWSERIAL_PushQueryA();
 	HWSERIAL_EnqueueQueryB( HWSerial.Ascii.setEncoderZero );
-	delay( 100 );
+	delay( 200 );
+	HWSERIAL_PushQueryB();
 	HWSERIAL_EnqueueQueryC( HWSerial.Ascii.setEncoderZero );
-	delay( 100 );
+	delay( 200 );
+	HWSERIAL_PushQueryC();
 
-	Serial.println( F( "Amplifier encoder initialization...           success!" ) );
+	delay( 400 );
+
+	// Process queries
+
+	if ( HWSerialA.available() ) {
+		HWSERIAL_ReadQueryResponseA();
+	}
+	if ( HWSerialB.available() ) {
+		HWSERIAL_ReadQueryResponseB();
+	}
+	if ( HWSerialC.available() ) {
+		HWSERIAL_ReadQueryResponseC();
+	}
+
+	delay( 100 );
+	// Serial.println( F( "Amplifier encoder initialization...           Success!" ) );
 }
 
 
@@ -276,17 +554,41 @@ void AmplifierClass::HWSERIAL_SetEncodersZero() {
 /**
  * @brief Drive the amplifiers 
  */
-void AmplifierClass::COMMAND_SendCommandedPWM( uint16_t pwmA, uint16_t pwmB, uint16_t pwmC ) {
+void AmplifierClass::COMMAND_SendCommandedPWM() {
 
-	// Clamp values to 16-bit range
-	pwmA = std::clamp( pwmA, uint16_t( 0 ), uint16_t( 4096 ) );
-	pwmB = std::clamp( pwmB, uint16_t( 0 ), uint16_t( 4096 ) );
-	pwmC = std::clamp( pwmC, uint16_t( 0 ), uint16_t( 4096 ) );
+	// Calculate sums for each amplifier
+	Command.commandedPwmTotalA = Command.commandedPwmA - Command.commandedPwmTensionA;
+	Command.commandedPwmTotalB = Command.commandedPwmB - Command.commandedPwmTensionB;
+	Command.commandedPwmTotalC = Command.commandedPwmC - Command.commandedPwmTensionC;
 
-	// Send command to amplifiers
-	analogWrite( PIN_AMPLIFIER_PWM_A, pwmA );
-	analogWrite( PIN_AMPLIFIER_PWM_B, pwmB );
-	analogWrite( PIN_AMPLIFIER_PWM_C, pwmC );
+
+
+	// // Clamp values to 16-bit range
+	Command.commandedPwmTotalA = constrain( Command.commandedPwmTotalA, Command.pwmMax, Command.pwmZero );
+	Command.commandedPwmTotalB = constrain( Command.commandedPwmTotalB, Command.pwmMax, Command.pwmZero );
+	Command.commandedPwmTotalC = constrain( Command.commandedPwmTotalC, Command.pwmMax, Command.pwmZero );
+
+
+	// // Make sure safety switch is engaged
+	// if ( Flags.isSafetySwitchEnabled && Flags.isEnabled ) {
+	if ( Flags.isEnabled ) {
+		// Serial.print( timerPWMDriverMillis );
+		// Serial.print( "   " );
+		// Serial.print( Command.commandedPwmTotalA );
+		// Serial.print( "  " );
+		// Serial.print( Command.commandedPwmTotalB );
+		// Serial.print( "  " );
+		// Serial.print( Command.commandedPwmTotalC );
+		// Serial.println( "  " );
+
+
+
+		analogWrite( PIN_AMPLIFIER_PWM_A, Command.commandedPwmTotalA );
+		analogWrite( PIN_AMPLIFIER_PWM_B, Command.commandedPwmTotalB );
+		analogWrite( PIN_AMPLIFIER_PWM_C, Command.commandedPwmTotalC );
+	} else {
+		COMMAND_SetZeroOutput();
+	}
 }
 
 
@@ -297,7 +599,12 @@ void AmplifierClass::COMMAND_SendCommandedPWM( uint16_t pwmA, uint16_t pwmB, uin
 void AmplifierClass::COMMAND_SetTension( uint8_t tensionPercentage ) {
 
 	// Apply tension
-	// [TODO]
+	Command.commandedPwmTensionA = int( float( tensionPercentage / 100.0f ) * 2048.0f );
+	Command.commandedPwmTensionB = int( float( tensionPercentage / 100.0f ) * 2048.0f );
+	Command.commandedPwmTensionC = int( float( tensionPercentage / 100.0f ) * 2048.0f );
+	Serial.print( F( "   Amplifier: Tension updated to " ) );
+	Serial.print( Command.commandedPwmTensionA );
+	Serial.println( " [pwm]." );
 }
 
 
@@ -307,15 +614,16 @@ void AmplifierClass::COMMAND_SetTension( uint8_t tensionPercentage ) {
  */
 void AmplifierClass::COMMAND_SetZeroOutput() {
 
-	// Update commanded values
-	Command.pwmOldA = Command.pwmNewA;
-	Command.pwmOldB = Command.pwmNewB;
-	Command.pwmOldC = Command.pwmNewC;
-
 	// Set zero values to PWM pins
-	analogWrite( PIN_AMPLIFIER_PWM_A, Command.pwmZero );
-	analogWrite( PIN_AMPLIFIER_PWM_B, Command.pwmZero );
-	analogWrite( PIN_AMPLIFIER_PWM_C, Command.pwmZero );
+	Command.commandedPwmA = Command.pwmZero;
+	Command.commandedPwmB = Command.pwmZero;
+	Command.commandedPwmC = Command.pwmZero;
+
+	analogWrite( PIN_AMPLIFIER_PWM_A, Command.commandedPwmA );
+	analogWrite( PIN_AMPLIFIER_PWM_B, Command.commandedPwmB );
+	analogWrite( PIN_AMPLIFIER_PWM_C, Command.commandedPwmC );
+
+	Serial.println( "COMMAND_SetZeroOutput complete" );
 }
 
 
@@ -350,6 +658,81 @@ void AmplifierClass::COMMAND_SetZeroOutput() {
  */
 
 
+/**
+ * @brief Interval timer callback for hardware serial interface
+ */
+void AmplifierClass::IT_HWSerial_Callback() {
+
+	// Process outgoing query packets
+	HWSERIAL_PushQueryA();
+	HWSERIAL_PushQueryB();
+	HWSERIAL_PushQueryC();
+
+	// Process incoming responses
+	if ( HWSerialA.available() ) {
+		HWSERIAL_ReadQueryResponseA();
+	}
+	if ( HWSerialB.available() ) {
+		HWSERIAL_ReadQueryResponseB();
+	}
+	if ( HWSerialC.available() ) {
+		HWSERIAL_ReadQueryResponseC();
+	}
+}
+
+
+void AmplifierClass::HWSERIAL_PushAllAndWaitForResponses() {
+
+	// Push queries out
+	HWSERIAL_PushQueryA();
+	delay( 300 );
+
+
+	// Wait for responses before proceeding
+	while ( HWSerial.isAwaitingResponseA ) {
+		Serial.println( "WhileA " );
+		if ( HWSerialA.available() ) {
+			Serial.println( "AvailA" );
+			HWSERIAL_ReadQueryResponseA();
+		} else if ( !HWSerialA.available() ) {
+			Serial.println( "!AvailA" );
+		}
+	}
+
+
+	HWSERIAL_PushQueryB();
+	delay( 300 );
+
+	while ( HWSerial.isAwaitingResponseB ) {
+		Serial.println( "WhileB " );
+		if ( HWSerialB.available() ) {
+			Serial.println( "AvailB" );
+			HWSERIAL_ReadQueryResponseB();
+		} else if ( !HWSerialB.available() ) {
+			Serial.println( "!AvailB" );
+		}
+	}
+	delay( 500 );
+
+	HWSERIAL_PushQueryC();
+	delay( 300 );
+
+
+	while ( HWSerial.isAwaitingResponseC ) {
+		Serial.println( "WhileC " );
+		if ( HWSerialC.available() ) {
+			Serial.println( "AvailC" );
+			HWSERIAL_ReadQueryResponseC();
+		} else if ( !HWSerialC.available() ) {
+			Serial.println( "!AvailC" );
+		}
+	}
+	delay( 500 );
+	// }
+	Serial.println( "HWSERIAL_PushAllAndWaitForResponse complete" );
+}
+
+
 /*******************************************
  *  HWSerial_EnqueueQuery  - Add to queue  * 
  *******************************************/
@@ -360,6 +743,7 @@ void AmplifierClass::COMMAND_SetZeroOutput() {
  */
 void AmplifierClass::HWSERIAL_EnqueueQueryA( const String& cmd ) {
 	HWSerial.Query.queueA.push( cmd );
+	Serial.println( "EnqueueA" );
 }
 
 /**
@@ -368,6 +752,7 @@ void AmplifierClass::HWSERIAL_EnqueueQueryA( const String& cmd ) {
  */
 void AmplifierClass::HWSERIAL_EnqueueQueryB( const String& cmd ) {
 	HWSerial.Query.queueB.push( cmd );
+	Serial.println( "EnqueueB" );
 }
 
 /**
@@ -376,8 +761,8 @@ void AmplifierClass::HWSERIAL_EnqueueQueryB( const String& cmd ) {
  */
 void AmplifierClass::HWSERIAL_EnqueueQueryC( const String& cmd ) {
 	HWSerial.Query.queueC.push( cmd );
+	Serial.println( "EnqueueC" );
 }
-
 
 
 /************************************************
@@ -388,11 +773,11 @@ void AmplifierClass::HWSERIAL_EnqueueQueryC( const String& cmd ) {
   * @brief Process the next query in queue A
   * 
   */
-void AmplifierClass::HWSERIAL_ProcessQueryA() {
+void AmplifierClass::HWSERIAL_PushQueryA() {
 
 	// Check if there isn't already a request in waiting, and the queue isn't empty
 	if ( !HWSerial.isAwaitingResponseA && !HWSerial.Query.queueA.empty() ) {
-
+		Serial.println( "PushA" );
 		// Extract first query
 		HWSerial.Query.outgoingNextA = HWSerial.Query.queueA.front();
 		HWSerial.Query.queueA.pop();
@@ -402,7 +787,9 @@ void AmplifierClass::HWSERIAL_ProcessQueryA() {
 		HWSerial.isAwaitingResponseA = true;
 
 		// Send query
+		HWSerialA.clear();
 		HWSerialA.print( HWSerial.Query.outgoingNextA );
+		// HWSerialA.flush();
 	}
 }
 
@@ -410,11 +797,11 @@ void AmplifierClass::HWSERIAL_ProcessQueryA() {
   * @brief Process the next query in queue B
   * 
   */
-void AmplifierClass::HWSERIAL_ProcessQueryB() {
+void AmplifierClass::HWSERIAL_PushQueryB() {
 
 	// Check if there isn't already a request in waiting, and the queue isn't empty
 	if ( !HWSerial.isAwaitingResponseB && !HWSerial.Query.queueB.empty() ) {
-
+		Serial.println( "PushB" );
 		// Extract first query
 		HWSerial.Query.outgoingNextB = HWSerial.Query.queueB.front();
 		HWSerial.Query.queueB.pop();
@@ -424,7 +811,9 @@ void AmplifierClass::HWSERIAL_ProcessQueryB() {
 		HWSerial.isAwaitingResponseB = true;
 
 		// Send query
+		// HWSerialB.clear();
 		HWSerialB.print( HWSerial.Query.outgoingNextB );
+		// HWSerialB.flush();
 	}
 }
 
@@ -432,10 +821,12 @@ void AmplifierClass::HWSERIAL_ProcessQueryB() {
   * @brief Process the next query in queue C
   * 
   */
-void AmplifierClass::HWSERIAL_ProcessQueryC() {
+void AmplifierClass::HWSERIAL_PushQueryC() {
+
 
 	// Check if there isn't already a request in waiting, and the queue isn't empty
 	if ( !HWSerial.isAwaitingResponseC && !HWSerial.Query.queueC.empty() ) {
+		Serial.println( "PushC" );
 
 		// Extract first query
 		HWSerial.Query.outgoingNextC = HWSerial.Query.queueC.front();
@@ -446,7 +837,9 @@ void AmplifierClass::HWSERIAL_ProcessQueryC() {
 		HWSerial.isAwaitingResponseC = true;
 
 		// Send query
+		HWSerialC.clear();
 		HWSerialC.print( HWSerial.Query.outgoingNextC );
+		// HWSerialC.flush();
 	}
 }
 
@@ -465,15 +858,17 @@ void AmplifierClass::HWSERIAL_ReadQueryResponseA() {
 
 	while ( HWSerialA.available() > 0 ) {
 
+		Serial.print( "ReadA " );
+
 		// Read character
 		char incomingChar = ( char )HWSerialA.read();
 
 		// Look for line return
-		if ( incomingChar == '\r' ) {
+		if ( incomingChar == '\r' || incomingChar == '\n' ) {
 
 			// Parse string
 			HWSERIAL_ParseResponseA();
-
+			HWSerialA.clear(); 
 		} else {
 
 			// Build string
@@ -491,14 +886,16 @@ void AmplifierClass::HWSERIAL_ReadQueryResponseB() {
 
 	while ( HWSerialB.available() > 0 ) {
 
+		Serial.print( "ReadB " );
 		// Read character
 		char incomingChar = ( char )HWSerialB.read();
 
 		// Look for line return
-		if ( incomingChar == '\r' ) {
+		if ( incomingChar == '\r' || incomingChar == '\n' ) {
 
 			// Parse string
 			HWSERIAL_ParseResponseB();
+			HWSerialB.clear(); 
 
 		} else {
 
@@ -514,18 +911,17 @@ void AmplifierClass::HWSERIAL_ReadQueryResponseB() {
   */
 void AmplifierClass::HWSERIAL_ReadQueryResponseC() {
 
-
 	while ( HWSerialC.available() > 0 ) {
-
+		Serial.print( "ReadC " );
 		// Read character
 		char incomingChar = ( char )HWSerialC.read();
 
 		// Look for line return
-		if ( incomingChar == '\r' ) {
+		if ( incomingChar == '\r' || incomingChar == '\n' ) {
 
 			// Parse string
 			HWSERIAL_ParseResponseC();
-
+			HWSerialC.clear(); 
 		} else {
 
 			// Build string
@@ -546,6 +942,7 @@ void AmplifierClass::HWSERIAL_ReadQueryResponseC() {
   */
 void AmplifierClass::HWSERIAL_ParseResponseA() {
 
+	Serial.println( "ParseA " );
 	// Remove "> " if it exists
 	if ( HWSerial.Query.responseA.startsWith( "v " ) ) {
 		HWSerial.Query.responseA.remove( 0, 2 );
@@ -553,23 +950,34 @@ void AmplifierClass::HWSERIAL_ParseResponseA() {
 
 	// Extract response
 	String response = HWSerial.Query.responseA;
+	Serial.println( "RespA: " );
+	Serial.print( HWSerial.Query.outgoingNextA );
+	Serial.print( " = " );
+	Serial.print( response );
+	Serial.println( " " );
 
 	// GetBaud
 	if ( HWSerial.Query.outgoingNextA == HWSerial.Ascii.getBaud ) {
-		HWSerial.AmpProperty.baudRateA = response.toInt();
+		Serial.print( "GetBaudA" );
+		HWSerial.Connection.baudRateA = response.toInt();
+		Serial.print( "  value = " );
+		Serial.println( response.toInt() );
 	}
-	// sETBaud
-	if ( HWSerial.Query.outgoingNextA == HWSerial.Ascii.setBaud115237 ) {
-		HWSerial.AmpProperty.baudRateA = response.toInt();
+	// SetBaud
+	else if ( HWSerial.Query.outgoingNextA == HWSerial.Ascii.setBaud115237 ) {
+		Serial.print( "SetBaud115237A" );
+		HWSerial.Connection.baudRateA = response.toInt();
 	}
 	// SetCurrentMode
 	else if ( HWSerial.Query.outgoingNextA == HWSerial.Ascii.setCurrentMode ) {
+		Serial.print( "SetCurrentA" );
 		Flags.isCurrentCommandedA = true;
 		// dataHandle.getData()->PrintDebug( "SetCurrentMode[A]: " + response );
 	}
 	// GetName
 	else if ( HWSerial.Query.outgoingNextA == HWSerial.Ascii.getName ) {
-		HWSerial.AmpProperty.nameStringA = response.substring( 2, HWSerial.Query.responseA.length() );
+		HWSerial.Connection.nameStringA = response.substring( 2, HWSerial.Query.responseA.length() );
+		Serial.print( "GetNameA" );
 		// dataHandle.getData()->PrintDebug( "GetName[A]: " + shared->Amplifier.nameA );
 	}
 	// GetEncoderCount
@@ -593,6 +1001,9 @@ void AmplifierClass::HWSERIAL_ParseResponseA() {
 	HWSerial.Query.outgoingNextA = "";
 	HWSerial.Query.responseA	 = "";
 	HWSerial.isAwaitingResponseA = false;
+	// HWSerialA.flush();
+	HWSerialA.clear();
+	Serial.println( "Completed A" );
 }
 
 /**
@@ -608,19 +1019,34 @@ void AmplifierClass::HWSERIAL_ParseResponseB() {
 
 	// Extract response
 	String response = HWSerial.Query.responseB;
+	Serial.println( "RespB: " );
+	Serial.print( HWSerial.Query.outgoingNextB );
+	Serial.print( " = " );
+	Serial.print( response );
+	Serial.println( " " );
 
 	// GetBaud
 	if ( HWSerial.Query.outgoingNextB == HWSerial.Ascii.getBaud ) {
-		HWSerial.AmpProperty.baudRateB = response.toInt();
+		Serial.print( "GetBaudB" );
+		HWSerial.Connection.baudRateB = response.toInt();
+		Serial.print( "  value = " );
+		Serial.println( response.toInt() );
+	}
+	// SetBaud
+	else if ( HWSerial.Query.outgoingNextB == HWSerial.Ascii.setBaud115237 ) {
+		Serial.print( "SetBaud115237B" );
+		HWSerial.Connection.baudRateB = response.toInt();
 	}
 	// SetCurrentMode
 	else if ( HWSerial.Query.outgoingNextB == HWSerial.Ascii.setCurrentMode ) {
+		Serial.print( "SetCurrentB" );
 		Flags.isCurrentCommandedB = true;
 		// dataHandle.getData()->PrintDebug( "SetCurrentMode[A]: " + response );
 	}
 	// GetName
 	else if ( HWSerial.Query.outgoingNextB == HWSerial.Ascii.getName ) {
-		HWSerial.AmpProperty.nameStringB = response.substring( 2, HWSerial.Query.responseB.length() );
+		HWSerial.Connection.nameStringB = response.substring( 2, HWSerial.Query.responseB.length() );
+		Serial.print( "GetNameB" );
 		// dataHandle.getData()->PrintDebug( "GetName[A]: " + shared->Amplifier.nameA );
 	}
 	// GetEncoderCount
@@ -644,6 +1070,9 @@ void AmplifierClass::HWSERIAL_ParseResponseB() {
 	HWSerial.Query.outgoingNextB = "";
 	HWSerial.Query.responseB	 = "";
 	HWSerial.isAwaitingResponseB = false;
+	// HWSerialB.flush();
+	HWSerialB.clear();
+	Serial.println( "Completed B" );
 }
 
 /**
@@ -652,6 +1081,8 @@ void AmplifierClass::HWSERIAL_ParseResponseB() {
   */
 void AmplifierClass::HWSERIAL_ParseResponseC() {
 
+	Serial.println( "Parse C" );
+
 	// Remove "> " if it exists
 	if ( HWSerial.Query.responseC.startsWith( "v " ) ) {
 		HWSerial.Query.responseC.remove( 0, 2 );
@@ -659,19 +1090,34 @@ void AmplifierClass::HWSERIAL_ParseResponseC() {
 
 	// Extract response
 	String response = HWSerial.Query.responseC;
+	Serial.println( "RespC: " );
+	Serial.print( HWSerial.Query.outgoingNextC );
+	Serial.print( " = " );
+	Serial.print( response );
+	Serial.println( " " );
 
 	// GetBaud
 	if ( HWSerial.Query.outgoingNextC == HWSerial.Ascii.getBaud ) {
-		HWSerial.AmpProperty.baudRateC = response.toInt();
+		Serial.print( "GetBaudC" );
+		HWSerial.Connection.baudRateC = response.toInt();
+		Serial.print( "  value = " );
+		Serial.println( response.toInt() );
+	}
+	// SetBaud
+	else if ( HWSerial.Query.outgoingNextC == HWSerial.Ascii.setBaud115237 ) {
+		Serial.print( "SetBaud115237C" );
+		HWSerial.Connection.baudRateC = response.toInt();
 	}
 	// SetCurrentMode
 	else if ( HWSerial.Query.outgoingNextC == HWSerial.Ascii.setCurrentMode ) {
+		Serial.print( "SetCurrentC" );
 		Flags.isCurrentCommandedC = true;
 		// dataHandle.getData()->PrintDebug( "SetCurrentMode[A]: " + response );
 	}
 	// GetName
 	else if ( HWSerial.Query.outgoingNextC == HWSerial.Ascii.getName ) {
-		HWSerial.AmpProperty.nameStringC = response.substring( 2, HWSerial.Query.responseC.length() );
+		HWSerial.Connection.nameStringC = response.substring( 2, HWSerial.Query.responseC.length() );
+		Serial.print( "GetNameC" );
 		// dataHandle.getData()->PrintDebug( "GetName[A]: " + shared->Amplifier.nameA );
 	}
 	// GetEncoderCount
@@ -695,8 +1141,40 @@ void AmplifierClass::HWSERIAL_ParseResponseC() {
 	HWSerial.Query.outgoingNextC = "";
 	HWSerial.Query.responseC	 = "";
 	HWSerial.isAwaitingResponseC = false;
+	// HWSerialC.flush();
+	HWSerialC.clear();
+	Serial.println( "Completed C" );
 }
 
+
+
+void AmplifierClass::HWSERIAL_GetAmplifierNames() {
+
+	// Queue up commands
+	HWSERIAL_EnqueueQueryA( HWSerial.Ascii.getName );
+	HWSERIAL_EnqueueQueryB( HWSerial.Ascii.getName );
+
+	// Push queries
+	HWSERIAL_EnqueueQueryC( HWSerial.Ascii.getName );
+	HWSERIAL_PushQueryA();
+	HWSERIAL_PushQueryB();
+	HWSERIAL_PushQueryC();
+
+	delay( 100 );
+
+	// Check responses
+	if ( HWSerialA.available() ) {
+		HWSERIAL_ReadQueryResponseA();
+	}
+	if ( HWSerialB.available() ) {
+		HWSERIAL_ReadQueryResponseB();
+	}
+	if ( HWSerialC.available() ) {
+		HWSERIAL_ReadQueryResponseC();
+	}
+
+	delay( 100 );
+}
 
 
 /*  =========================================
@@ -721,7 +1199,9 @@ void AmplifierClass::HWSERIAL_ParseResponseC() {
  */
 bool AmplifierClass::FLAGS_GetSafetySwitchState() {
 
-	return true;
+	// Read state
+	Flags.isSafetySwitchEnabled = digitalReadFast( PIN_AMPLIFIER_SAFETY );
+	return Flags.isSafetySwitchEnabled;
 }
 
 /**
@@ -755,7 +1235,7 @@ String AmplifierClass::FLAGS_GetStateStringC() {
  */
 bool AmplifierClass::FLAGS_GetAmplifierState() {
 
-	return ( Flags.isEnabledA && Flags.isEnabledB && Flags.isEnabledC );
+	return ( Flags.isEnabled );
 }
 
 
@@ -777,7 +1257,7 @@ bool AmplifierClass::FLAGS_GetAmplifierState() {
 /**
  * @brief Read encoders using HWserial
  */
-void AmplifierClass::READ_Encoders() {
+void AmplifierClass::HWSERIAL_GetEncoderValues() {
 
 	// Send serial command to read encoder
 	HWSERIAL_EnqueueQueryA( HWSerial.Ascii.getEncoderCount );
@@ -788,12 +1268,120 @@ void AmplifierClass::READ_Encoders() {
 /**
  * @brief Read amplifier baud rate
  */
-void AmplifierClass::READ_BaudRates() {
+void AmplifierClass::HWSERIAL_GetAmplifierBaudRates() {
 
-	// Send serial command to read encoder
-	HWSERIAL_EnqueueQueryA( HWSerial.Ascii.getBaud );
-	HWSERIAL_EnqueueQueryB( HWSerial.Ascii.getBaud );
-	HWSERIAL_EnqueueQueryC( HWSerial.Ascii.getBaud );
+	Serial.println( "Entering HWSERIAL_GetAmplifierBaudRates" );
+
+
+	// A
+	HWSERIAL_EnqueueQueryA(HWSerial.Ascii.getBaud);
+	delay(50);
+	HWSERIAL_PushQueryA();
+	HWSERIAL_WaitForPortA(500);           // no Serial spam, has timeout
+	// no HWSerialA.clear() here
+  
+	// B
+	HWSERIAL_EnqueueQueryB(HWSerial.Ascii.getBaud);
+	delay(50);
+	HWSERIAL_PushQueryB();
+	HWSERIAL_WaitForPortB(500);
+	// no HWSerialB.clear()
+  
+	// C
+	HWSERIAL_EnqueueQueryC(HWSerial.Ascii.getBaud);
+	delay(50);
+	HWSERIAL_PushQueryC();
+	HWSERIAL_WaitForPortC(500);
+	// no HWSerialC.clear()
+  
+	Serial.print(F("Baud rates: A = "));
+	Serial.print(HWSerial.Connection.baudRateA);
+	Serial.print(F(", B = "));
+	Serial.print(HWSerial.Connection.baudRateB);
+	Serial.print(F(", C = "));
+	Serial.println(HWSerial.Connection.baudRateC);
+  
+	Serial.println("HWSERIAL_GetAmplifierBaudRates complete");
+
+
+	// // Enqueue command
+	// HWSERIAL_EnqueueQueryA( HWSerial.Ascii.getBaud );
+	// delay( 100 );
+
+	// // Push queries out
+	// HWSERIAL_PushQueryA();
+	// delay( 300 );
+
+	// HWSerialA.flush(); 
+
+	// // Wait for responses before proceeding
+	// while ( HWSerial.isAwaitingResponseA ) {
+	// 	Serial.println( "WhileA " );
+	// 	if ( HWSerialA.available() ) {
+	// 		Serial.println( "AvailA" );
+	// 		HWSERIAL_ReadQueryResponseA();
+	// 	} else if ( !HWSerialA.available() ) {
+	// 		Serial.println( "!AvailA" );
+	// 	}
+	// }
+	// delay(300) ; 
+
+
+
+
+	// HWSERIAL_EnqueueQueryB( HWSerial.Ascii.getBaud );
+	// delay( 100 );
+
+	// HWSERIAL_PushQueryB();
+	// delay( 300 );
+
+	// HWSerialB.flush(); 
+	// while ( HWSerial.isAwaitingResponseB ) {
+	// 	Serial.println( "WhileB " );
+	// 	if ( HWSerialB.available() ) {
+	// 		Serial.println( "AvailB" );
+	// 		HWSERIAL_ReadQueryResponseB();
+	// 	} else if ( !HWSerialB.available() ) {
+	// 		Serial.println( "!AvailB" );
+	// 	}
+	// }
+	// delay(300) ; 
+
+
+
+
+	// HWSERIAL_EnqueueQueryC( HWSerial.Ascii.getBaud );
+	// delay( 100 );
+	// HWSERIAL_PushQueryC();
+	// delay( 300 );
+	// HWSerialC.flush(); 
+
+	// while ( HWSerial.isAwaitingResponseC ) {
+	// 	Serial.println( "WhileC " );
+	// 	if ( HWSerialC.available() ) {
+	// 		Serial.println( "AvailC" );
+	// 		HWSERIAL_ReadQueryResponseC();
+	// 	} else if ( !HWSerialC.available() ) {
+	// 		Serial.println( "!AvailC" );
+	// 	}
+	// }
+	// delay(300) ; 
+	// // HWSerialC.clear(); 
+
+
+	// // Wait for responses
+	// // HWSERIAL_PushAllAndWaitForResponses();
+
+	// // Print baud rates
+	// Serial.print( F( "Baud rates: A = " ) );
+	// Serial.print( HWSerial.Connection.baudRateA );
+	// Serial.print( F( ", B = " ) );
+	// Serial.print( HWSerial.Connection.baudRateB );
+	// Serial.print( F( ", C = " ) );
+	// Serial.print( HWSerial.Connection.baudRateC );
+	// Serial.println();
+
+	Serial.println( "HWSERIAL_GetAmplifierBaudRates complete" );
 }
 
 

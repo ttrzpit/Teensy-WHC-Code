@@ -1,13 +1,8 @@
-#include "LoggingClass.h"
-#include "AmplifierClass.h"
-#include "EncoderClass.h"
-#include "GamepadClass.h"
+#include "SDLogger.h"
 
 // Constructor (with other classes passed in for logging elements)
-LoggingClass::LoggingClass( AmplifierClass& amp, EncoderClass& enc, GamepadClass& gpad )
-	: Amplifier( amp )
-	, Encoders( enc )
-	, Gamepad( gpad ) { }
+LoggingClass::LoggingClass( )
+	{ }
 
 
 
@@ -19,7 +14,7 @@ void LoggingClass::Begin() {
 	InitializeSdCard();
 
 	delay( 250 );
-	Serial.println( F( "Logging system initialization...              success!" ) );
+	Serial.println( F( "Logging system initialization...              Success!" ) );
 }
 
 /**

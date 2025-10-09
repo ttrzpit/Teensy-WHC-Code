@@ -43,11 +43,11 @@ class EncoderClass {
 	*  Accessors  *
 	***************/
 	public:
-	void  Begin();					  // Initializes class
-	void  Update();					  // Run every loop
-	float GetHorizontalAngleDeg();	  // Get horizontal angle in degrees
-	float GetVerticalAngleDeg();	  // Get vertical angle in degrees
-	void  ZeroEncoders();			  // Zero encoder values
+	void  Begin();										   // Initializes class
+	void  Update( float& horizontal, float& vertical );	   // Run every loop
+	float GetHorizontalAngleDeg();						   // Get horizontal angle in degrees
+	float GetVerticalAngleDeg();						   // Get vertical angle in degrees
+	void  ZeroEncoders();								   // Zero encoder values
 	private:
 	void PollEncoders();	// Poll encoder values
 

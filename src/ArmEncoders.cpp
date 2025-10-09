@@ -1,4 +1,4 @@
-#include "EncoderClass.h"
+#include "ArmEncoders.h"
 
 EncoderClass::EncoderClass()
 	: encoderHorizontal( PIN_ENCODER_HOR_A, PIN_ENCODER_HOR_B )
@@ -14,7 +14,7 @@ void EncoderClass::Begin() {
 	ConfigurePins();
 
 	delay( 250 );
-	Serial.println( F( "Platform encoder initialization...            success!" ) );
+	Serial.println( F( "Platform encoder initialization...            Success!" ) );
 }
 
 
@@ -56,10 +56,14 @@ void EncoderClass::ConfigurePins() {
 /**
  * @brief Runs every loop to update encoder class
  */
-void EncoderClass::Update() {
+void EncoderClass::Update( float& horizontal, float& vertical ) {
 
 	// Poll encoders
 	PollEncoders();
+
+	// Update values
+	horizontal = horizontalAngleDegrees;
+	vertical   = verticalAngleDegrees;
 }
 
 
