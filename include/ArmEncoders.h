@@ -15,17 +15,17 @@
 
 
 
-class EncoderClass {
+class ArmEncoderClass {
 
 	/*****************
 	*  Constructors  *
 	******************/
 	public:
-	EncoderClass();	   // Default constructor and safeguards to prevent multiple amplifier instances
-	EncoderClass( const EncoderClass& )			   = delete;
-	EncoderClass& operator=( const EncoderClass& ) = delete;
-	EncoderClass( EncoderClass&& )				   = delete;
-	EncoderClass& operator=( EncoderClass&& )	   = delete;
+	ArmEncoderClass();	   // Default constructor and safeguards to prevent multiple amplifier instances
+	ArmEncoderClass( const ArmEncoderClass& )			   = delete;
+	ArmEncoderClass& operator=( const ArmEncoderClass& ) = delete;
+	ArmEncoderClass( ArmEncoderClass&& )				   = delete;
+	ArmEncoderClass& operator=( ArmEncoderClass&& )	   = delete;
 
 	/******************
 	*  Configuration  *
@@ -44,7 +44,7 @@ class EncoderClass {
 	***************/
 	public:
 	void  Begin();										   // Initializes class
-	void  Update( float& horizontal, float& vertical );	   // Run every loop
+	void  Check( float& horizontal, float& vertical );	   // Run every loop
 	float GetHorizontalAngleDeg();						   // Get horizontal angle in degrees
 	float GetVerticalAngleDeg();						   // Get vertical angle in degrees
 	void  ZeroEncoders();								   // Zero encoder values

@@ -1,0 +1,830 @@
+#include "SoftwareSerialInterface.h"
+
+
+
+// /*  ===================================================================================
+//  *  ===================================================================================
+//  *
+//  *   SSSSS    EEEEEE  TTTTTTT  UU   UU  PPPPP
+//  *  SS        EE         T     UU   UU  PP  PP
+//  *  SS        EE         T     UU   UU  PP  PP
+//  *   SSSS     EEEE       T     UU   UU  PPPPP
+//  *      SS    EE         T     UU   UU  PP
+//  *      SS    EE         T     UU   UU  PP
+//  *   SSSSS    EEEEEE     T      UUUUU   PP
+//  *
+//  *  ===================================================================================
+//  *  ===================================================================================*/
+
+
+// Global hook initialization
+SoftwareSerialInterfaceClass* SoftwareSerialInterfaceClass::instance = nullptr;
+
+
+// Constructor
+SoftwareSerialInterfaceClass::SoftwareSerialInterfaceClass( systemStateEnum& systemStateRef, AmplifierClass& ampRef, ArmEncoderClass& armEncRef )
+	: SystemStateReference( systemStateRef )
+	, AmplifierReference( ampRef )
+	, ArmEncoderReference( armEncRef ) {
+	SoftwareSerialInterfaceClass::instance = this;
+}
+
+/**
+ * @brief Initialize class
+ */
+void SoftwareSerialInterfaceClass::Begin() {
+
+	Serial.println( F( "KEYBOARD:      Interface initialization...            Complete." ) );
+	// XXX          F(  X              X                                      X
+
+	delay( 250 );
+}
+
+
+
+// /**
+//  * ===================================================================
+//  * ===================================================================
+//  *
+//  *  SSSS   WW       WW     SSSS   EEEEEE  RRRRR    IIIIII   AAAAA   LL
+//  * SS      WW       WW    SS      EE      RR  RR     II    AA   AA  LL
+//  * SS      WW       WW    SS      EE      RR  RR     II    AA   AA  LL
+//  *  SSSS   WW   W   WW     SSSS   EEEE    RRRRR      II    AAAAAAA  LL
+//  *     SS   W  WWW  W         SS  EE      RR  RR     II    AA   AA  LL
+//  *     SS    Ww   wW          SS  EE      RR  RR     II    AA   AA  LL
+//  *  SSSS      W   W        SSSS   EEEEEE  RR   RR  IIIIII  AA   AA  LLLLL
+//  *
+//  * ===================================================================
+//  * ===================================================================*/
+
+
+/**
+ * @brief Serial event handler for software serial
+ */
+void serialEvent() {
+
+	// Connect hook to class function
+	if ( SoftwareSerialInterfaceClass::instance ) {
+		SoftwareSerialInterfaceClass::instance->OnSoftwareSerialEvent();
+	}
+}
+
+
+/**
+ * @brief Callback for software serial
+ */
+void SoftwareSerialInterfaceClass::OnSoftwareSerialEvent() {
+
+	// Read data while buffer is populated
+	while ( Serial.available() > 0 ) {
+
+		// Read each byte
+		char incomingChar = ( char )Serial.read();
+
+		// Look for terminating character
+		if ( incomingChar == '\r' || incomingChar == '\n' ) {
+
+			// Make sure packet isn't empty
+			if ( incomingSerialString != "" ) {
+
+				// Parse packet
+				RespondToKeyboardCommands();
+			}
+		} else {
+			incomingSerialString += incomingChar;
+		}
+	}
+}
+
+
+
+// /*  ===================================================================================
+//  *  ===================================================================================
+//  *
+//  *   RRRRR    EEEEEE  SSSSS   PPPPP   OOOOO  NN   NN  SSSSS   EEEEEE
+//  *   RR  RR   EE      SS      PP  PP  OO   OO NNN  NN SS      EE
+//  *   RR  RR   EE      SS      PP  PP  OO   OO NN N NN SS      EE
+//  *   RRRRR    EEEE     SSSS   PPPPP   OO   OO NN  NNN  SSSS   EEEE
+//  *   RR  RR   EE          SS  PP      OO   OO NN   NN     SS  EE
+//  *   RR  RR   EE          SS  PP      OO   OO NN   NN     SS  EE
+//  *   RR  RR   EEEEEE  SSSSS   PP       OOOOO  NN   NN  SSSSS   EEEEEE
+//  *
+//  *  ===================================================================================
+//  *  ===================================================================================*/
+
+
+/**
+ * @brief Parse keyboard commands
+ * 
+ */
+void SoftwareSerialInterfaceClass::RespondToKeyboardCommands() {
+
+	// Check that incoming serial string is not empty
+	if ( incomingSerialString != nullptr && incomingSerialString != "" ) {
+
+		// Print command received
+		Serial.print( F( ">> Received command [" ) );
+		Serial.print( incomingSerialString );
+		Serial.println( "]" );
+
+
+		// Extract command key
+		char cmd = incomingSerialString.charAt( 0 );
+
+
+		// Set idle state
+		if ( cmd == '`' ) {
+
+			// Update state
+			SYSTEM_STATE = systemStateEnum::IDLE;
+			currentState = "IDLE";
+		}
+
+		// Set measure ROM state
+		if ( cmd == '1' ) {
+
+			Respond_MeasureAmplifierRangeOfMotionLimits(  );
+		}
+
+		// Set measure current state
+		if ( cmd == '2' ) {
+
+			// Respond_MeasureAmplifierCurrentLimit( false );
+		}
+
+		// Set tension value
+		if ( cmd == 'T' || cmd == 't' ) {
+
+			Respond_SetTension();
+		}
+
+		// Print system state
+		if ( cmd == 's' ) {
+
+			Respond_PrintSystemStateBlock();
+		}
+
+		// Toggle system state scroll
+		if ( cmd == 'S' ) {
+
+			Respond_ToggleScrollingState();
+		}
+
+		// Zero arm encoders
+		if ( cmd == 'z' ) {
+
+			Respond_ZeroPlatformEncoders();
+		}
+
+		// Zero amplifier encoders
+		if ( cmd == 'Z' ) {
+
+			Respond_ZeroMotorEncoders();
+		}
+
+		// Toggle amplfier output state
+		if ( cmd == 'e' || cmd == 'E' ) {
+
+			Respond_ToggleAmplifierOutput();
+		}
+
+		// Toggle amp limits
+		if ( cmd == 'l' || cmd == 'L' ) {
+
+			Respond_ToggleCurrentLimits();
+		}
+	}
+
+	// Reset incoming serial string
+	incomingSerialString = "";
+	Serial.println();
+
+	// Re-load menu and state
+	// PrintSystemState();
+	// PrintMenu();
+}
+
+
+
+/********************
+ * Response helpers * 
+ ********************/
+
+
+/**
+  * @brief Sets the tension
+  */
+void SoftwareSerialInterfaceClass::Respond_SetTension() {
+
+	// Check: is the next character a number
+	if ( isdigit( incomingSerialString.charAt( 1 ) ) ) {
+
+		// Extract value
+		uint8_t tensionValue = incomingSerialString.substring( 1 ).toInt();
+
+		// Make sure tension is limited to 20 percent
+		if ( tensionValue <= 20 ) {
+
+			// Serial response
+			Serial.print( F( "   Setting tension value to " ) );
+			Serial.print( tensionValue );
+			Serial.print( F( "% (" ) );
+			Serial.print( AmplifierReference.GetCurrentFromIntegerPercentage( tensionValue ) );
+			Serial.println( F( " Amps." ) );
+
+			// Set tension value
+			AmplifierReference.SetTension( tensionValue, tensionValue, tensionValue );
+
+		} else {
+
+			// Serial response
+			Serial.println( F( "   Tensioning value is too high, ignoring command." ) );
+		}
+	} else {
+
+		// Non-numberic input
+		Serial.println( F( "   Invalid tension command! Value is non-numeric." ) );
+	}
+}
+
+
+/**
+ * @brief Print the system status block
+ */
+void SoftwareSerialInterfaceClass::Respond_PrintSystemStateBlock() {
+
+	// Serial response
+	Serial.println( F( "   Printing system state." ) );
+
+	// Print system state
+	PrintSystemState();
+}
+
+
+/**
+ * @brief Toggle system state scroll
+ */
+void SoftwareSerialInterfaceClass::Respond_ToggleScrollingState() {
+
+	// Serial response
+	Serial.println( F( "   Toggling system state scroll." ) );
+
+	// Toggle system state scroll
+	isScrollingOutputEnabled = !isScrollingOutputEnabled;
+}
+
+/**
+ * @brief Zero platform encoders
+ */
+void SoftwareSerialInterfaceClass::Respond_ZeroPlatformEncoders() {
+
+	// Serial response
+	Serial.println( F( "   Arm encoders reset." ) );
+
+	// Zero arm encoders
+	ArmEncoderReference.ZeroEncoders();
+}
+
+/**
+ * @brief Zero motor encoders
+ */
+void SoftwareSerialInterfaceClass::Respond_ZeroMotorEncoders() {
+
+	// Serial response
+	Serial.println( F( "   Motor encoders reset." ) );
+
+	// Zero amplifier encoders
+	AmplifierReference.ZeroMotorEncoders();
+}
+
+
+/**
+ * @brief Toggle amplifier output
+ */
+void SoftwareSerialInterfaceClass::Respond_ToggleAmplifierOutput() {
+
+	// Get current state
+	bool ampState = AmplifierReference.GetAmplifierOutputState();
+	ampState	  = !ampState;
+
+	// Toggle amplfier output
+	AmplifierReference.SetAmplifierOutputState( ampState );
+
+	// Serial response
+	Serial.print( F( "   Amplfier output " ) );
+	Serial.print( ampState ? "enabled, motors on." : "disabled, motors off." );
+	Serial.println();
+}
+
+
+/**
+ * @brief Toggle current limits
+ */
+void SoftwareSerialInterfaceClass::Respond_ToggleCurrentLimits() {
+
+	// Get current state
+	bool isLimitApplied = AmplifierReference.GetIsAmplifierPowerLimitApplied();
+
+	// Check if limit is not applied
+	if ( !isLimitApplied ) {
+
+		// Check if limits have been set before enabling limits
+		if ( !AmplifierReference.Command.Limits.isAmplifierPowerLimitSet ) {
+
+			// Limits have not been set, don't enable limits
+			AmplifierReference.SetIsAmplifierPowerLimitApplied( false );
+
+		} else {
+
+			// Limits set, enable limit control
+			AmplifierReference.SetIsAmplifierPowerLimitApplied( true );
+		}
+	} else {
+
+
+		AmplifierReference.SetIsAmplifierPowerLimitApplied( false );
+	}
+}
+
+
+void SoftwareSerialInterfaceClass::Respond_MeasureAmplifierRangeOfMotionLimits(  ) {
+
+	// Check if already running
+	if ( SYSTEM_STATE != systemStateEnum::MEASURING_RANGE_OF_MOTION ) {
+
+		// Start measuring
+		AmplifierReference.StartMeasuringRangeOfMotionLimits();
+
+		// Update state
+		SYSTEM_STATE = systemStateEnum::MEASURING_RANGE_OF_MOTION;
+		currentState = "MEASURING_ROM";
+
+	} else {
+
+		// Stop measuring
+		AmplifierReference.StopMeasuringRangeOfMotionLimits();
+
+		// Update state
+		SYSTEM_STATE = systemStateEnum::IDLE;
+		currentState = "IDLE";
+	}
+
+}
+
+
+
+// /*  ===================================================================================
+//  *  ===================================================================================
+//  *
+//  *   OOOOO   UU   UU  TTTTTTT  PPPPP    UU   UU  TTTTTTT
+//  *  OO   OO  UU   UU     T     PP  PP   UU   UU     T
+//  *  OO   OO  UU   UU     T     PP  PP   UU   UU     T
+//  *  OO   OO  UU   UU     T     PPPPP    UU   UU     T
+//  *  OO   OO  UU   UU     T     PP       UU   UU     T
+//  *  OO   OO  UU   UU     T     PP       UU   UU     T
+//  *   OOOOO    UUUUU      T     PP        UUUUU      T
+//  *
+//  *  ===================================================================================
+//  *  ===================================================================================*/
+
+/**
+ * @brief Print the system state
+ */
+void SoftwareSerialInterfaceClass::PrintSystemState() {
+
+
+	Serial.println();
+	Serial.println( F( "=== SYSTEM STATE ===================================================================================" ) );
+
+	// Amplifier state
+	Serial.print( F( "Amplifiers:\t\tMotors:\t" ) );
+	Serial.print( AmplifierReference.GetAmplifierOutputState() ? "ENABLED" : "Disabled" );
+	Serial.print( F( "\t\tSafety Switch: " ) );
+	Serial.print( AmplifierReference.GetSafetySwitchState() ? "ENGAGED" : "DISENGAGED" );
+	Serial.print( F( "\t\tTension: " ) );
+	Serial.print( AmplifierReference.GetTensionValue() );
+	Serial.println();
+
+	// Amplifier names
+	Serial.print( F( "\t\t\t" ) );
+	Serial.print( AmplifierReference.GetAmplifierNameA() );
+	Serial.print( F( "\t\t\t" ) );
+	Serial.print( AmplifierReference.GetAmplifierNameB() );
+	Serial.print( F( "\t\t\t" ) );
+	Serial.print( AmplifierReference.GetAmplifierNameC() );
+	Serial.println();
+
+	// Baud
+	Serial.print( F( "\t\t\tBaudA:\t" ) );
+	Serial.print( AmplifierReference.GetBaudA() );
+	Serial.print( F( "\t\tBaudB:\t" ) );
+	Serial.print( AmplifierReference.GetBaudB() );
+	Serial.print( F( "\t\tBaudC:\t" ) );
+	Serial.print( AmplifierReference.GetBaudC() );
+	Serial.println();
+
+	// Motor current
+	Serial.print( F( "Motor Output:\t\tCurrA:\t" ) );
+	Serial.print( AmplifierReference.GetCurrentReadingA() );
+	Serial.print( F( "\t\tCurrB:\t" ) );
+	Serial.print( AmplifierReference.GetCurrentReadingB() );
+	Serial.print( F( "\t\tCurrC:\t" ) );
+	Serial.print( AmplifierReference.GetCurrentReadingC() );
+	Serial.println( F( "" ) );
+
+	// Motor PWM value
+	Serial.print( F( "\t\t\tPwmA:\t" ) );
+	Serial.print( AmplifierReference.GetAmplfierPwmA() );
+	Serial.print( F( "\t\tPwmB:\t" ) );
+	Serial.print( AmplifierReference.GetAmplfierPwmA() );
+	Serial.print( F( "\t\tPwmC:\t" ) );
+	Serial.print( AmplifierReference.GetAmplfierPwmA() );
+	Serial.println( F( "" ) );
+
+	// Motor encoders (deg)
+	Serial.print( F( "Motor Encoders:\t\tPhiA:\t" ) );
+	Serial.print( AmplifierReference.GetAngleDegA() );
+	Serial.print( F( " deg\tPhiB:\t" ) );
+	Serial.print( AmplifierReference.GetAngleDegB() );
+	Serial.print( F( " deg\tPhiC:\t" ) );
+	Serial.print( AmplifierReference.GetAngleDegC() );
+	Serial.println( F( " deg" ) );
+
+	// Motor encoders (count)
+	Serial.print( F( "\t\t\tCntA:\t" ) );
+	Serial.print( AmplifierReference.GetEncoderCountA() );
+	Serial.print( F( "\t\tCntB:\t" ) );
+	Serial.print( AmplifierReference.GetEncoderCountB() );
+	Serial.print( F( "\t\tCntC:\t" ) );
+	Serial.print( AmplifierReference.GetEncoderCountC() );
+	Serial.println( F( "" ) );
+
+	// Arm encoders
+	Serial.print( F( "Platform Encoders:\tArmX:\t" ) );
+	Serial.print( ArmEncoderReference.GetHorizontalAngleDeg() );
+	Serial.print( F( " deg\tArmY:\t" ) );
+	Serial.print( ArmEncoderReference.GetVerticalAngleDeg() );
+	Serial.println( F( " deg" ) );
+
+	Serial.println();
+}
+
+
+/**
+ * @brief Prints a scrolling system state line
+ */
+void SoftwareSerialInterfaceClass::PrintScrollingOutput() {
+
+	// Safety switch
+	Serial.print( F( "STATE: " ) );
+	Serial.print( currentState );
+	Serial.print( F( "    " ) );
+	Serial.print( F( "Output: " ) );
+	Serial.print( AmplifierReference.GetAmplifierOutputState() ? "ON" : "Off" );
+	Serial.print( F( "    " ) );
+	Serial.print( F( "Safety: " ) );
+	Serial.print( AmplifierReference.GetSafetySwitchState() ? "ON" : "Off" );
+	Serial.print( F( "    " ) );
+	Serial.print( F( "Baud: " ) );
+	Serial.print( AmplifierReference.GetBaudA() );
+
+	// Motor output
+	Serial.print( F( "    " ) );
+	Serial.print( F( "PowerABC: " ) );
+	Serial.print( AmplifierReference.GetAmplfierPwmA() );
+	Serial.print( F( " / " ) );
+	Serial.print( AmplifierReference.GetCurrentReadingA() );
+	Serial.print( F( "A | " ) );
+	Serial.print( AmplifierReference.GetAmplfierPwmB() );
+	Serial.print( F( " / " ) );
+	Serial.print( AmplifierReference.GetCurrentReadingB() );
+	Serial.print( F( "A | " ) );
+	Serial.print( AmplifierReference.GetAmplfierPwmC() );
+	Serial.print( F( " / " ) );
+	Serial.print( AmplifierReference.GetCurrentReadingC() );
+	Serial.print( F( "A" ) );
+
+	// Motor Limits
+	Serial.print( F( "    " ) );
+	Serial.print( F( "Motor Limit: " ) );
+	Serial.print( AmplifierReference.Command.Limits.isAmplifierPowerLimitSet ? "SET" : "Not Set" );
+	Serial.print( F( ", " ) );
+	Serial.print( AmplifierReference.Command.Limits.isAmplifierPowerLimitApplied ? "ON" : "Off" );
+	Serial.print( F( "    " ) );
+	Serial.print( F( "LimitsABC: " ) );
+	Serial.print( AmplifierReference.GetAmplifierPwmPowerLimitA() );
+	Serial.print( F( " | " ) );
+	Serial.print( AmplifierReference.GetAmplifierPwmPowerLimitB() );
+	Serial.print( F( " | " ) );
+	Serial.print( AmplifierReference.GetAmplifierPwmPowerLimitC() );
+
+
+	// Tension
+	Serial.print( F( "    " ) );
+	Serial.print( F( "Tension: " ) );
+	Serial.print( AmplifierReference.GetTensionValue() );
+	Serial.print( "%" );
+
+	// Motor encoders (deg)
+	Serial.print( F( "    " ) );
+	Serial.print( F( "PhiABC: " ) );
+	Serial.print( AmplifierReference.GetAngleDegA() );
+	Serial.print( F( "° | " ) );
+	Serial.print( AmplifierReference.GetAngleDegB() );
+	Serial.print( F( "° | " ) );
+	Serial.print( AmplifierReference.GetAngleDegC() );
+	Serial.print( F( "°" ) );
+
+	// Encoder Limits
+	Serial.print( F( "    " ) );
+	Serial.print( F( "Encoder Limit: " ) );
+	Serial.print( AmplifierReference.Command.Limits.isEncoderLimitSet ? "SET" : "Not Set" );
+	Serial.print( F( ", " ) );
+	Serial.print( AmplifierReference.Command.Limits.isEncoderLimitApplied ? "ON" : "Off" );
+	Serial.print( F( "    " ) );
+	Serial.print( F( "LimitsABC: " ) );
+	Serial.print( AmplifierReference.GetAmplifierEncoderLimitA() );
+	Serial.print( F( " | " ) );
+	Serial.print( AmplifierReference.GetAmplifierEncoderLimitB() );
+	Serial.print( F( " | " ) );
+	Serial.print( AmplifierReference.GetAmplifierEncoderLimitC() );
+
+
+	// Arm encoders
+	Serial.print( F( "    " ) );
+	Serial.print( F( "ThetaXY [deg]: " ) );
+	Serial.print( ArmEncoderReference.GetHorizontalAngleDeg() );
+	Serial.print( F( "° | " ) );
+	Serial.print( ArmEncoderReference.GetVerticalAngleDeg() );
+	Serial.print( F( "°" ) );
+
+	Serial.println();
+}
+
+
+
+// /*  ===================================================================================
+//  *  ===================================================================================
+//  *
+//  *   MM    MM  EEEEEE  NN   NN  UU   UU
+//  *   MMM  MMM  EE      NNN  NN  UU   UU
+//  *   MM MM MM  EE      NN N NN  UU   UU
+//  *   MM    MM  EEEE    NN  NNN  UU   UU
+//  *   MM    MM  EE      NN   NN  UU   UU
+//  *   MM    MM  EE      NN   NN  UU   UU
+//  *   MM    MM  EEEEEE  NN   NN   UUUUU
+//  *
+//  *  ===================================================================================
+//  *  ===================================================================================*/
+
+
+/**
+ * @brief Draws menu of keyboard options
+ */
+void SoftwareSerialInterfaceClass::PrintMenu() {
+
+	Serial.println();
+	Serial.println( F( "=== INPUT MENU =====================================================================================" ) );
+	Serial.println( F( "Information:   [S] Display system state      " ) );
+	Serial.println( F( "Controls:      [E] Enable motor output       [Txx] Set tension to xx%" ) );
+	Serial.println( F( "Platform:      [Z] Zero platform encoders" ) );
+}
+
+
+
+// 	/**
+//  * @brief Function that gets called every loop to update serial interface
+//  *
+//  */
+// 	void SoftwareSerialInterface::Check( const char*& buffer ) {
+
+// 		// Display output if timer ticks over
+// 		if ( timerRuntimeMillis >= ( 1000 / timerFrequencyHz ) ) {
+
+// 			// Read input
+// 			buffer = ReadSerialInput();
+
+// 			// Reset timer
+// 			timerRuntimeMillis = 0;
+// 		}
+// 	}
+
+
+
+// 	/**
+//   * @brief Reads serial port input
+//   */
+// 	const char* SoftwareSerialInterface::ReadSerialInput() {
+
+// 		// Check if data is waiting
+// 		while ( Serial.available() ) {
+
+// 			// Read character
+// 			char c = ( char )Serial.read();
+
+// 			// Read end of line
+// 			if ( c == '\n' || c == '\r' ) {
+// 				if ( inputCommandIndex > 0 ) {
+// 					inputCommandBuffer[inputCommandIndex] = '\0';
+// 					// ParseSerialInput( inputCommandBuffer );
+// 					Serial.clear();
+// 					inputCommandIndex = 0;
+// 					return inputCommandBuffer;
+// 				}
+// 				continue;
+// 			}
+
+// 			// Add char into buffer (max 7 chars + null)
+// 			if ( inputCommandIndex < sizeof( inputCommandBuffer ) - 1 ) {
+// 				inputCommandBuffer[inputCommandIndex++] = c;
+
+// 				// Optional: auto-commit at 4 chars
+// 				if ( inputCommandIndex >= 4 ) {
+// 					inputCommandBuffer[inputCommandIndex] = '\0';
+// 					Serial.clear();
+// 					inputCommandIndex = 0;
+// 					return inputCommandBuffer;
+// 				}
+// 			} else {
+// 				// Overflow -> terminate, process, reset
+// 				inputCommandBuffer[sizeof( inputCommandBuffer ) - 1] = '\0';
+// 				Serial.clear();
+// 				inputCommandIndex = 0;
+// 				return inputCommandBuffer;
+// 			}
+// 		}
+
+// 		return nullptr;
+// 	}
+
+
+
+// /**
+//  * @brief Parses serial input commands
+//  * @param buffer commands to be parsed
+//  */
+// void SerialInterfaceClass::ParseSerialInput( const char* buffer ) {
+
+// 	// Extract key
+// 	char cmd = buffer[0];
+// 	Serial.print( F( "Parsing received command [" ) );
+// 	Serial.print( buffer );
+// 	Serial.print( F( "] --> " ) );
+
+// 	// Enable amplifier
+// 	if ( ( cmd == 'e' || cmd == 'E' ) && buffer[1] == '\0' ) {
+
+// 		// Toggle amplifier enable
+// 		if ( Amplifier.FLAGS_GetAmplifierState() ) {
+// 			Amplifier.COMMAND_Disable();
+// 			Serial.println( F( "disabling amplifiers." ) );
+// 		} else {
+// 			Amplifier.COMMAND_Enable();
+// 			Serial.println( F( "enabling amplifiers." ) );
+// 		}
+// 		return;
+// 	}
+
+// 	// Zero encoders
+// 	if ( ( cmd == 'z' || cmd == 'Z' ) && buffer[1] == '\0' ) {
+// 		Encoders.ZeroEncoders();
+// 		Serial.println( F( "zeroing encoders." ) );
+// 		return;
+// 	}
+
+// 	// Set tension value
+// 	if ( cmd == 't' || cmd == 'T' ) {
+// 		uint8_t val = atoi( buffer + 1 );
+
+// 		// Check that tensioning isn't too high
+// 		if ( val <= 25 ) {
+
+// 			// Update tension value
+// 			Amplifier.COMMAND_SetTension( val );
+// 			Serial.print( F( "setting tension value to " ) );
+// 			Serial.print( val );
+// 			Serial.println( F( "%." ) );
+// 		} else {
+// 			Serial.println( F( "tensioning value too high, ignoring." ) );
+// 		}
+
+// 		return;
+// 	}
+
+// 	// Unknown command
+// 	Serial.println( F( "command not understood, ignoring command. " ) );
+// }
+
+
+
+// /**
+//  * @brief Displays the serial interface
+//  */
+// void SerialInterfaceClass::DisplaySerialInterface() {
+
+// 	// Select elements to show
+
+// 	// Platform encoder
+// 	if ( Elements.showPlatformEncoder ) {
+// 		ShowElement_PlatformEncoders();
+// 	}
+
+// 	// Motor encoders
+// 	if ( Elements.showMotorEncoderCounts ) {
+// 		ShowElement_MotorEncoderCounts();
+// 	}
+
+
+// 	// Motor encoders
+// 	if ( Elements.showMotorEncoderDegrees ) {
+// 		ShowElement_MotorEncoderAngles();
+// 	}
+
+// 	// Baud rates
+// 	if ( Elements.showBaudRates ) {
+// 		ShowElement_BaudRate();
+// 	}
+// }
+
+
+/*  ============================================================================
+ *  ============================================================================
+ * 
+ *  EEEEEE   LL        EEEEEE   MM      MM   EEEEEE   NN   NN   TTTTTT    SSSS
+ *  EE       LL        EE       MMMM  MMMM   EE       NNN  NN     TT      SS
+ *  EE       LL        EE       MM MMMM MM   EE       NN N NN     TT      SS
+ *  EEEE     LL        EEEE     MM  MM  MM   EEEE     NN  NNN     TT       SSSS
+ *  EE       LL        EE       MM      MM   EE       NN   NN     TT          SS
+ *  EE       LL        EE       MM      MM   EE       NN   NN     TT          SS
+ *  EEEEEE   LLLLL     EEEEEE   MM      MM   EEEEEE   NN   NN     TT        SSSS
+ * 
+ *  ============================================================================ 
+ *  ============================================================================*/
+
+// /**
+//   * @brief Show experimental platform encoder values
+//   */
+// void SerialInterfaceClass::ShowElement_PlatformEncoders() {
+
+// 	// Display encoder output
+// 	Serial.print( F( "Platform Encoders [DEG] " ) );
+// 	Serial.print( F( "x: " ) );
+// 	Serial.print( Encoders.GetHorizontalAngleDeg() );
+// 	Serial.print( F( " deg,  " ) );
+// 	Serial.print( F( "y: " ) );
+// 	Serial.print( Encoders.GetVerticalAngleDeg() );
+// 	Serial.print( F( " deg" ) );
+// 	Serial.println();
+// }
+
+
+
+// /**
+//   * @brief Show raw motor encoder values
+//   */
+// void SerialInterfaceClass::ShowElement_MotorEncoderCounts() {
+
+// 	// Display encoder output
+// 	Serial.print( F( "Motor Encoder [COUNTS] " ) );
+// 	Serial.print( F( "A: " ) );
+// 	Serial.print( Amplifier.READ_GetCountA() );
+// 	Serial.print( F( ", B: " ) );
+// 	Serial.print( Amplifier.READ_GetCountB() );
+// 	Serial.print( F( ", C: " ) );
+// 	Serial.print( Amplifier.READ_GetCountC() );
+// 	Serial.println();
+// }
+
+
+// /**
+//   * @brief Show motor encoder angle values
+//   */
+// void SerialInterfaceClass::ShowElement_MotorEncoderAngles() {
+
+// 	// Display encoder output
+// 	Serial.print( F( "Motor Encoder Angles [DEG] " ) );
+// 	Serial.print( F( "A: " ) );
+// 	Serial.print( Amplifier.Read.angleDegA );
+// 	Serial.print( F( ", B: " ) );
+// 	Serial.print( Amplifier.READ_GetAngleDegB() );
+// 	Serial.print( F( ", C: " ) );
+// 	Serial.print( Amplifier.READ_GetAngleDegC() );
+// 	Serial.println();
+// }
+
+
+// /**
+//   * @brief Show amplifier baud rates
+//   */
+// void SerialInterfaceClass::ShowElement_BaudRate() {
+
+// 	// Display encoder output
+// 	Serial.print( F( "Amplifier Baud Rates [BPS]" ) );
+// 	Serial.print( F( "A: " ) );
+// 	Serial.print( Amplifier.HWSerial.AmpProperty.baudRateA );
+// 	Serial.print( F( ", B: " ) );
+// 	Serial.print( Amplifier.HWSerial.AmpProperty.baudRateB );
+// 	Serial.print( F( ", C: " ) );
+// 	Serial.print( Amplifier.HWSerial.AmpProperty.baudRateC );
+// 	Serial.println();
+// }

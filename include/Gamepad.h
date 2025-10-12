@@ -41,7 +41,7 @@ class GamepadClass {
 	*  Accessors  *
 	***************/
 	public:
-	void   Update( bool& isPressed, int8_t& buttonIndex, String& buttonName );	 // Call from main every loop
+	void   Check( bool& isPressed, int8_t& buttonIndex, String& buttonName );	 // Call from main every loop
 	void   Begin();																 // Start class and initialize
 	void   PollButtons();														 // Reads the state of the buttons
 	int8_t GetCardinalState();													 // Get indexed button state

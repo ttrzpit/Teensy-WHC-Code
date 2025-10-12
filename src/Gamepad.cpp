@@ -27,7 +27,7 @@ void GamepadClass::Begin() {
 /**
  * @brief Called by main
  */
-void GamepadClass::Update( bool& isPressed, int8_t& buttonIndex, String& buttonName ) {
+void GamepadClass::Check( bool& isPressed, int8_t& buttonIndex, String& buttonName ) {
 
 	// Poll buttons and process analog data
 	PollButtons();

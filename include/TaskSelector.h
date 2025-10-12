@@ -5,7 +5,7 @@
 
 // Forward declarations
 class AmplifierClass;
-class EncoderClass;
+class ArmEncoderClass;
 class GamepadClass;
 
 
@@ -15,10 +15,10 @@ class TaskSelectorClass {
 	*  Constructors  *
 	******************/
 	public:
-	explicit TaskSelectorClass( AmplifierClass& amp, EncoderClass& enc, GamepadClass& gpad );	 // Constructor
+	explicit TaskSelectorClass( AmplifierClass& amp, ArmEncoderClass& enc, GamepadClass& gpad );	 // Constructor
 	private:
 	AmplifierClass& Amplifier;	  // Stored reference to amplifier
-	EncoderClass&	Encoders;	  // Stored reference to arm encoders
+	ArmEncoderClass&	Encoders;	  // Stored reference to arm encoders
 	GamepadClass&	Gamepad;	  // Stored reference to gamepad
 
 	/**************

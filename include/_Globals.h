@@ -8,6 +8,7 @@ struct KeyboardGlobals {
 
 	// Variables
 	const char* incomingBuffer = nullptr;	 // Incoming keyboard buffer
+	String		keyboardCommand = "";
 };
 
 

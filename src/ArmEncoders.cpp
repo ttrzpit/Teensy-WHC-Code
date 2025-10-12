@@ -1,6 +1,6 @@
 #include "ArmEncoders.h"
 
-EncoderClass::EncoderClass()
+ArmEncoderClass::ArmEncoderClass()
 	: encoderHorizontal( PIN_ENCODER_HOR_A, PIN_ENCODER_HOR_B )
 	, encoderVertical( PIN_ENCODER_VER_A, PIN_ENCODER_VER_B ) { }
 
@@ -8,7 +8,7 @@ EncoderClass::EncoderClass()
 /**
  * @brief Initialize class
  */
-void EncoderClass::Begin() {
+void ArmEncoderClass::Begin() {
 
 	// Configure pins
 	ConfigurePins();
@@ -22,7 +22,7 @@ void EncoderClass::Begin() {
  * @brief Get the newest horizontal angle
  * @return float Angle in degrees
  */
-float EncoderClass::GetHorizontalAngleDeg() {
+float ArmEncoderClass::GetHorizontalAngleDeg() {
 	return horizontalAngleDegrees;
 }
 
@@ -32,7 +32,7 @@ float EncoderClass::GetHorizontalAngleDeg() {
  * @brief Get the newest vertical angle
  * @return float Angle in degrees
  */
-float EncoderClass::GetVerticalAngleDeg() {
+float ArmEncoderClass::GetVerticalAngleDeg() {
 	return verticalAngleDegrees;
 }
 
@@ -41,7 +41,7 @@ float EncoderClass::GetVerticalAngleDeg() {
  * @brief Initialize the pins on the Teensy
  * 
  */
-void EncoderClass::ConfigurePins() {
+void ArmEncoderClass::ConfigurePins() {
 
 	// Initialize pins
 	pinMode( PIN_ENCODER_HOR_A, INPUT );
@@ -56,7 +56,7 @@ void EncoderClass::ConfigurePins() {
 /**
  * @brief Runs every loop to update encoder class
  */
-void EncoderClass::Update( float& horizontal, float& vertical ) {
+void ArmEncoderClass::Check( float& horizontal, float& vertical ) {
 
 	// Poll encoders
 	PollEncoders();
@@ -71,7 +71,7 @@ void EncoderClass::Update( float& horizontal, float& vertical ) {
 /**
  * @brief Read both encoders
  */
-void EncoderClass::PollEncoders() {
+void ArmEncoderClass::PollEncoders() {
 
 	// Read new horizontal values
 	horizontalCountNew = encoderHorizontal.read();
@@ -98,7 +98,7 @@ void EncoderClass::PollEncoders() {
 
 
 
-void EncoderClass::ZeroEncoders() {
+void ArmEncoderClass::ZeroEncoders() {
 
 	// Write zeros to encoders
 	encoderHorizontal.write( 0 );

@@ -3,6 +3,7 @@
 // Global hook initialization
 AmplifierClass* AmplifierClass::instance = nullptr;
 
+// Constructor
 AmplifierClass::AmplifierClass() {
 	AmplifierClass::instance = this;
 }
@@ -63,6 +64,7 @@ void AmplifierClass::ConfigurePins() {
 	pinMode( PIN_AMPLIFIER_LED_A, OUTPUT );
 	pinMode( PIN_AMPLIFIER_LED_B, OUTPUT );
 	pinMode( PIN_AMPLIFIER_LED_C, OUTPUT );
+	pinMode( PIN_AMPLIFIER_SAFETY, INPUT_PULLDOWN );
 
 	// Set initial pin states
 	digitalWriteFast( PIN_AMPLIFIER_ENABLE_A, LOW );
@@ -100,11 +102,11 @@ void AmplifierClass::InitializeAmplifierA() {
 
 	// Read amplifier name
 	SendQueryA( HWSerial.Ascii.getName );
-	delay( 250 );
+	delay( 100 );
 
 	// Read to confirm connection update
 	SendQueryA( HWSerial.Ascii.getBaud );
-	delay( 250 );
+	delay( 100 );
 
 	// Set amplifier into PWM current-control mode
 	SendQueryA( HWSerial.Ascii.setCurrentMode );
@@ -112,7 +114,7 @@ void AmplifierClass::InitializeAmplifierA() {
 
 	// Set amplifier into higher baud rate
 	SendQueryA( HWSerial.Ascii.setBaud115237 );
-	delay( 250 );
+	delay( 100 );
 
 	// Restart HWSerialA connection
 	HWSerialA.end();
@@ -120,7 +122,7 @@ void AmplifierClass::InitializeAmplifierA() {
 
 	// Read to confirm connection update
 	SendQueryA( HWSerial.Ascii.getBaud );
-	delay( 250 );
+	delay( 100 );
 
 	// Send initial zero command to enable output
 	CommandZero();
@@ -144,11 +146,11 @@ void AmplifierClass::InitializeAmplifierB() {
 
 	// Read amplifier name
 	SendQueryB( HWSerial.Ascii.getName );
-	delay( 250 );
+	delay( 100 );
 
 	// Read to confirm connection update
 	SendQueryB( HWSerial.Ascii.getBaud );
-	delay( 250 );
+	delay( 100 );
 
 	// Set amplifier into PWM current-control mode
 	SendQueryB( HWSerial.Ascii.setCurrentMode );
@@ -156,7 +158,7 @@ void AmplifierClass::InitializeAmplifierB() {
 
 	// Set amplifier into higher baud rate
 	SendQueryB( HWSerial.Ascii.setBaud115237 );
-	delay( 250 );
+	delay( 100 );
 
 	// Restart HWSerialA connection
 	HWSerialB.end();
@@ -164,7 +166,7 @@ void AmplifierClass::InitializeAmplifierB() {
 
 	// Read to confirm connection update
 	SendQueryB( HWSerial.Ascii.getBaud );
-	delay( 250 );
+	delay( 100 );
 
 	Serial.println( F( "AMPLIFIER:     Amplifier B initialization...          Complete." ) );
 	// XXX          F(  X              X                                      X
@@ -185,11 +187,11 @@ void AmplifierClass::InitializeAmplifierC() {
 
 	// Read amplifier name
 	SendQueryC( HWSerial.Ascii.getName );
-	delay( 250 );
+	delay( 100 );
 
 	// Read to confirm connection update
 	SendQueryC( HWSerial.Ascii.getBaud );
-	delay( 250 );
+	delay( 100 );
 
 	// Set amplifier into PWM current-control mode
 	SendQueryC( HWSerial.Ascii.setCurrentMode );
@@ -197,7 +199,7 @@ void AmplifierClass::InitializeAmplifierC() {
 
 	// Set amplifier into higher baud rate
 	SendQueryC( HWSerial.Ascii.setBaud115237 );
-	delay( 250 );
+	delay( 100 );
 
 	// Restart HWSerialA connection
 	HWSerialC.end();
@@ -205,7 +207,7 @@ void AmplifierClass::InitializeAmplifierC() {
 
 	// Read to confirm connection update
 	SendQueryC( HWSerial.Ascii.getBaud );
-	delay( 250 );
+	delay( 100 );
 
 	Serial.println( F( "AMPLIFIER:     Amplifier C initialization...          Complete." ) );
 	// XXX          F(  X              X                                      X
@@ -425,17 +427,42 @@ void AmplifierClass::ParseQueryA() {
 	// Serial.print( "DEBUG! Response: " );
 	// Serial.println( responseA );
 
+	if ( isVerboseOutputEnabled ) {
+		Serial.print( "  PacketA: " );
+		Serial.print( HWSerial.Packets.outgoingQueryA );
+		Serial.print( " --> " );
+		Serial.print( responseA );
+	}
+
 	// Get baud
 	if ( HWSerial.Packets.outgoingQueryA == HWSerial.Ascii.getBaud ) {
 		HWSerial.Properties.baudRateA = responseA.substring( 2, responseA.length() ).toInt();
 	}
 
+	// Get current reading
+	if ( HWSerial.Packets.outgoingQueryA == HWSerial.Ascii.getCurrentReading ) {
+		int32_t count			 = responseA.substring( 2, responseA.length() ).toInt();
+		Sensors.measuredCurrentA = float( count / 100.0f );
+	}
+
 	// Get encoder reading
 	if ( HWSerial.Packets.outgoingQueryA == HWSerial.Ascii.getEncoderCount ) {
-		// Sensors.measuredEncoderCountA = responseA.substring( 2, responseA.length() ).toInt();
-		const long cnt				  = strtol( responseA.c_str(), nullptr, 10 );
-		Sensors.measuredEncoderCountA = static_cast<int32_t>( cnt );
-		Sensors.angleDegA			  = degrees( Sensors.measuredEncoderCountA * 2.0f * M_PI / 4096.0f );
+		int32_t count					 = responseA.substring( 2, responseA.length() ).toInt();
+		Sensors.measuredEncoderCountA	 = count;
+		Sensors.compensatedEncoderCountA = Sensors.measuredEncoderCountA - Sensors.encoderOffsetA;
+		Sensors.motorAngleDegA			 = degrees( Sensors.compensatedEncoderCountA * 2.0f * M_PI / 4096.0f );
+
+		// Update limit if being measured
+		if ( isEncoderLimitBeingMeasured ) {
+
+			// Record limit A if larger than previous
+			if ( Sensors.compensatedEncoderCountA < Command.Limits.encoderLimitA ) {
+
+				// Save limit
+				Command.Limits.encoderLimitA = Sensors.compensatedEncoderCountA;
+				Command.Limits.phiLimitDegA	 = degrees( Sensors.compensatedEncoderCountA * 2.0f * M_PI / 4096.0f );
+			}
+		}
 	}
 
 	// Get name
@@ -481,16 +508,43 @@ void AmplifierClass::ParseQueryB() {
 	// Serial.print( "DEBUG! Response: " );
 	// Serial.println( responseA );
 
+	if ( isVerboseOutputEnabled ) {
+		Serial.print( "\t\tPacketB: " );
+		Serial.print( HWSerial.Packets.outgoingQueryB );
+		Serial.print( " --> " );
+		Serial.print( responseB );
+	}
+
 	// Get baud
 	if ( HWSerial.Packets.outgoingQueryB == HWSerial.Ascii.getBaud ) {
 		HWSerial.Properties.baudRateB = responseB.substring( 2, responseB.length() ).toInt();
 	}
 
+	// Get current reading
+	if ( HWSerial.Packets.outgoingQueryB == HWSerial.Ascii.getCurrentReading ) {
+		int32_t count			 = responseB.substring( 2, responseB.length() ).toInt();
+		Sensors.measuredCurrentA = float( count / 100.0f );
+	}
+
+
 	// Get encoder reading
 	if ( HWSerial.Packets.outgoingQueryB == HWSerial.Ascii.getEncoderCount ) {
-		const long cnt				  = strtol( responseB.c_str(), nullptr, 10 );
-		Sensors.measuredEncoderCountB = static_cast<int32_t>( cnt );
-		Sensors.angleDegB			  = degrees( Sensors.measuredEncoderCountB * 2.0f * M_PI / 4096.0f );
+		int32_t count					 = responseB.substring( 2, responseB.length() ).toInt();
+		Sensors.measuredEncoderCountB	 = count;
+		Sensors.compensatedEncoderCountB = Sensors.measuredEncoderCountB - Sensors.encoderOffsetB;
+		Sensors.motorAngleDegB			 = degrees( Sensors.compensatedEncoderCountB * 2.0f * M_PI / 4096.0f );
+
+		// Update limit if being measured
+		if ( isEncoderLimitBeingMeasured ) {
+
+			// Record limit A if larger than previous
+			if ( Sensors.compensatedEncoderCountB < Command.Limits.encoderLimitB ) {
+
+				// Save limit
+				Command.Limits.encoderLimitB = Sensors.compensatedEncoderCountB;
+				Command.Limits.phiLimitDegB	 = degrees( Sensors.compensatedEncoderCountB * 2.0f * M_PI / 4096.0f );
+			}
+		}
 	}
 
 	// Get name
@@ -536,16 +590,43 @@ void AmplifierClass::ParseQueryC() {
 	// Serial.print( "DEBUG! Response: " );
 	// Serial.println( responseA );
 
+	if ( isVerboseOutputEnabled ) {
+		Serial.print( "\t\tPacketC: " );
+		Serial.print( HWSerial.Packets.outgoingQueryC );
+		Serial.print( " --> " );
+		Serial.print( responseC );
+		Serial.println();
+	}
+
 	// Get baud
 	if ( HWSerial.Packets.outgoingQueryC == HWSerial.Ascii.getBaud ) {
 		HWSerial.Properties.baudRateC = responseC.substring( 2, responseC.length() ).toInt();
 	}
 
+	// Get current reading
+	if ( HWSerial.Packets.outgoingQueryC == HWSerial.Ascii.getCurrentReading ) {
+		int32_t count			 = responseC.substring( 2, responseC.length() ).toInt();
+		Sensors.measuredCurrentC = float( count / 100.0f );
+	}
+
 	// Get encoder reading
 	if ( HWSerial.Packets.outgoingQueryC == HWSerial.Ascii.getEncoderCount ) {
-		const long cnt				  = strtol( responseC.c_str(), nullptr, 10 );
-		Sensors.measuredEncoderCountC = static_cast<int32_t>( cnt );
-		Sensors.angleDegC			  = degrees( Sensors.measuredEncoderCountC * 2.0f * M_PI / 4096.0f );
+		int32_t count					 = responseC.substring( 2, responseC.length() ).toInt();
+		Sensors.measuredEncoderCountC	 = count;
+		Sensors.compensatedEncoderCountC = Sensors.measuredEncoderCountC - Sensors.encoderOffsetC;
+		Sensors.motorAngleDegC			 = degrees( Sensors.compensatedEncoderCountC * 2.0f * M_PI / 4096.0f );
+
+		// Update limit if being measured
+		if ( isEncoderLimitBeingMeasured ) {
+
+			// Record limit A if larger than previous
+			if ( Sensors.compensatedEncoderCountC < Command.Limits.encoderLimitC ) {
+
+				// Save limit
+				Command.Limits.encoderLimitC = Sensors.compensatedEncoderCountC;
+				Command.Limits.phiLimitDegC	 = degrees( Sensors.compensatedEncoderCountC * 2.0f * M_PI / 4096.0f );
+			}
+		}
 	}
 
 	// Get name
@@ -579,6 +660,158 @@ void AmplifierClass::ParseQueryC() {
 	HWSerial.Packets.outgoingQueryC	  = HWSerial.Ascii.setIdle;
 	HWSerial.Packets.respondingQueryC = "";
 }
+
+
+/**
+ * @brief Toggle verbose serial output
+ * @param state true/false for toggle
+ */
+void AmplifierClass::EnableDebugOutput( bool state ) {
+
+	// Update flag
+	isVerboseOutputEnabled = state;
+}
+
+
+// /*  ===================================================================================
+//  *  ===================================================================================
+//  *
+//  *   SSSSS   EEEEEE  NN   NN  SSSSS   OOOOO  RRRRR   SSSSS
+//  *  SS       EE      NNN  NN  SS      OO   OO RR  RR SS
+//  *  SS       EE      NN N NN  SS      OO   OO RR  RR SS
+//  *   SSSS    EEEE    NN  NNN   SSSS   OO   OO RRRRR  SSSS
+//  *      SS   EE      NN   NN      SS  OO   OO RR  RR    SS
+//  *      SS   EE      NN   NN      SS  OO   OO RR  RR    SS
+//  *   SSSSS   EEEEEE  NN   NN   SSSSS   OOOOO  RR  RR SSSSS
+//  *
+//  *  ===================================================================================
+//  *  ===================================================================================*/
+
+
+/**
+ * @brief Read on-board sensors
+ */
+void AmplifierClass::ReadSensors() {
+
+	// Cycle over current and encoder queries
+
+	if ( activeQuery == 0 ) {
+
+		// Read amplifierA current
+		SendQueryA( HWSerial.Ascii.getCurrentReading );
+		activeQuery++;
+
+	} else if ( activeQuery == 1 ) {
+
+		// Read amplifierB current
+		SendQueryB( HWSerial.Ascii.getCurrentReading );
+		activeQuery++;
+
+	} else if ( activeQuery == 2 ) {
+
+		// Read amplifierB current
+		SendQueryC( HWSerial.Ascii.getCurrentReading );
+		activeQuery++;
+
+	} else if ( activeQuery == 3 ) {
+
+		// Read amplifierB current
+		SendQueryA( HWSerial.Ascii.getEncoderCount );
+		activeQuery++;
+
+	} else if ( activeQuery == 4 ) {
+
+		// Read amplifierB current
+		SendQueryB( HWSerial.Ascii.getEncoderCount );
+		activeQuery++;
+
+	} else if ( activeQuery == 5 ) {
+
+		// Read amplifierB current
+		SendQueryC( HWSerial.Ascii.getEncoderCount );
+		activeQuery = 0;
+
+	} else {
+		activeQuery = 0;
+	}
+
+
+	// Read current
+	// ReadCurrents();
+
+	// Read encoders
+	// ReadEncoders();
+}
+
+/**
+ * @brief Send zero command to motor encoders
+ * 
+ */
+void AmplifierClass::ZeroMotorEncoders() {
+
+	// Save
+	Sensors.encoderOffsetA = Sensors.measuredEncoderCountA;
+	Sensors.encoderOffsetB = Sensors.measuredEncoderCountB;
+	Sensors.encoderOffsetC = Sensors.measuredEncoderCountC;
+}
+
+// /**
+//  * @brief Read the motor currents via HWSerial
+//  */
+// void AmplifierClass::ReadCurrents() {
+
+// 	// Serial.print ( "ReadCurrents" ) ;
+// 	// Cycle through current measurements
+// 	if ( activeQueryCurrent == 0 ) {
+// 		Serial.println();
+// 		// Serial.println ( "(A)" ) ;
+// 		// Read amplifierA current
+// 		SendQueryA( HWSerial.Ascii.getCurrentReading );
+// 		activeQueryCurrent++;
+
+// 	} else if ( activeQueryCurrent == 1 ) {
+// 		// Serial.println ( "(B)" ) ;
+// 		// Read amplifierB current
+// 		SendQueryB( HWSerial.Ascii.getCurrentReading );
+// 		activeQueryCurrent++;
+
+// 	} else if ( activeQueryCurrent == 2 ) {
+// 		// Serial.println ( "(C)" ) ;
+// 		// Read amplifierA current
+// 		SendQueryC( HWSerial.Ascii.getCurrentReading );
+// 		activeQueryCurrent = 0;
+// 	}
+// }
+
+// /**
+//  * @brief Read the motor currents via HWSerial
+//  */
+// void AmplifierClass::ReadEncoders() {
+
+// 	Serial.print( "ReadEncoders" );
+// 	// Cycle through encoder measurements
+// 	if ( activeQueryEncoder == 0 ) {
+
+// 		// Serial.println("A") ;
+// 		// Read amplifierA encoder
+// 		SendQueryA( HWSerial.Ascii.getEncoderCount );
+// 		activeQueryEncoder++;
+
+// 	} else if ( activeQueryEncoder == 1 ) {
+
+// 		// Serial.println("B") ;
+// 		// Read amplifierB encoder
+// 		SendQueryB( HWSerial.Ascii.getEncoderCount );
+// 		activeQueryEncoder++;
+
+// 	} else if ( activeQueryEncoder == 2 ) {
+
+// 		// Serial.println("C") ;
+// 		// Read amplifierC encoder
+// 		SendQueryC( HWSerial.Ascii.getEncoderCount );
+// 		activeQueryEncoder = 0;
+// 	}
+// }
 
 
 
@@ -665,9 +898,44 @@ int32_t AmplifierClass::GetBaudC() {
 }
 
 
-/************
- * SET TENSION *
- ************/
+
+/***********************
+ * GET CURRENT READING *
+ ***********************/
+
+/**
+  * @brief Returns the measured current for amplifier A
+  * @return float Current (in amps)
+  */
+float AmplifierClass::GetCurrentReadingA() {
+
+	return Sensors.measuredCurrentA;
+}
+
+
+/**
+  * @brief Returns the measured current for amplifier B
+  * @return float Current (in amps)
+  */
+float AmplifierClass::GetCurrentReadingB() {
+
+	return Sensors.measuredCurrentB;
+}
+
+
+/**
+  * @brief Returns the measured current for amplifier A
+  * @return float Current (in amps)
+  */
+float AmplifierClass::GetCurrentReadingC() {
+
+	return Sensors.measuredCurrentC;
+}
+
+
+/***********
+ * TENSION *
+ ***********/
 
 /**
  * @brief Set the tension value for the three amplifiers
@@ -675,15 +943,29 @@ int32_t AmplifierClass::GetBaudC() {
  */
 void AmplifierClass::SetTension( uint8_t tenA, uint8_t tenB, uint8_t tenC ) {
 
+	// Update variable
+	Command.Pwm.tensionInteger = tenA;
+
 	// Calculate appropriate tension
-	Command.Pwm.tensionA = int( float( tenA / 100.0f ) * 2048.0f );
-	Command.Pwm.tensionB = int( float( tenB / 100.0f ) * 2048.0f );
-	Command.Pwm.tensionC = int( float( tenC / 100.0f ) * 2048.0f );
+	Command.Pwm.tensionA = int( float( tenA / 100.0f ) * 2047.0f );
+	Command.Pwm.tensionB = int( float( tenB / 100.0f ) * 2047.0f );
+	Command.Pwm.tensionC = int( float( tenC / 100.0f ) * 2047.0f );
 
 	// Update results
-	Serial.print( F( "   Amplifier: Tension updated to " ) );
+	Serial.print( F( "  >> Amplifier: Tension updated to " ) );
 	Serial.print( Command.Pwm.tensionC );
+	Serial.println( "." );
 }
+
+/**
+ * @brief Returns the tension value
+ * @return int8_t Returns the tension percentage as an integer
+ */
+int8_t AmplifierClass::GetTensionValue() {
+
+	return Command.Pwm.tensionInteger;
+}
+
 
 
 /************************
@@ -696,7 +978,7 @@ void AmplifierClass::SetTension( uint8_t tenA, uint8_t tenB, uint8_t tenC ) {
  */
 float AmplifierClass::GetAngleDegA() {
 
-	return Sensors.angleDegA ;
+	return Sensors.motorAngleDegA;
 }
 
 
@@ -706,7 +988,7 @@ float AmplifierClass::GetAngleDegA() {
  */
 float AmplifierClass::GetAngleDegB() {
 
-	return Sensors.angleDegB ;
+	return Sensors.motorAngleDegB;
 }
 
 
@@ -716,8 +998,336 @@ float AmplifierClass::GetAngleDegB() {
  */
 float AmplifierClass::GetAngleDegC() {
 
-	return Sensors.angleDegC ;
+	return Sensors.motorAngleDegC;
 }
+
+
+
+/*********************
+ * GET ENCODER COUNT *
+ *********************/
+
+/**
+ * @brief Returns the angle of amp encoder A
+ * @return float angle in degrees
+ */
+int32_t AmplifierClass::GetEncoderCountA() {
+
+	return Sensors.compensatedEncoderCountA;
+}
+
+
+/**
+ * @brief Returns the angle of amp encoder B
+ * @return float angle in degrees
+ */
+int32_t AmplifierClass::GetEncoderCountB() {
+
+	return Sensors.compensatedEncoderCountB;
+}
+
+
+/**
+ * @brief Returns the angle of amp encoder C
+ * @return float angle in degrees
+ */
+int32_t AmplifierClass::GetEncoderCountC() {
+
+	return Sensors.compensatedEncoderCountC;
+}
+
+
+
+/*****************
+ * AMPLIFIER PWM *
+ *****************/
+
+/**
+  * @brief Return the PWM value being driven by the amplifier
+  * @return uint16_t PWM value
+  */
+uint16_t AmplifierClass::GetAmplfierPwmA() {
+	return Command.Pwm.totalOutgoingA;
+}
+
+/**
+  * @brief Return the PWM value being driven by the amplifier
+  * @return uint16_t PWM value
+  */
+uint16_t AmplifierClass::GetAmplfierPwmB() {
+	return Command.Pwm.totalOutgoingB;
+}
+
+/**
+  * @brief Return the PWM value being driven by the amplifier
+  * @return uint16_t PWM value
+  */
+uint16_t AmplifierClass::GetAmplfierPwmC() {
+	return Command.Pwm.totalOutgoingC;
+}
+
+
+/*********************
+ * CONVERSIONS *
+ *********************/
+
+/**
+ * @brief Convert a given integer percentage value into a current
+ * @param percentValue Integer percentage (e.g., 42 = 42% = 0.42)
+ * @return float Amplifier current
+ */
+float AmplifierClass::GetCurrentFromIntegerPercentage( uint8_t percentValue ) {
+
+	// Current goes from 0 to 1.89A
+	return float( percentValue / 100.0f * 1.89f );
+}
+
+
+/**
+ * @brief Return state of the amplifier
+ * 
+ * @return true 	Amplifier running
+ * @return false 	Amplifier disabled
+ */
+bool AmplifierClass::GetAmplifierOutputState() {
+
+	return Command.Flags.isOutputEnabled;
+}
+
+
+/**
+ * @brief Sets the amplifier output state
+ * 
+ * @param newState State of amplifier output
+ */
+void AmplifierClass::SetAmplifierOutputState( bool newState ) {
+
+	Command.Flags.isOutputEnabled = newState;
+}
+
+
+
+/****************
+ * POWER LIMITS *
+ ****************/
+
+
+/**
+ * @brief Returns the PWM limit for the amp
+ */
+int16_t AmplifierClass::GetAmplifierPwmPowerLimitA() {
+
+	return Command.Limits.pwmLimitA;	// Return amp PWM Limit
+}
+
+
+/**
+ * @brief Returns the PWM limit for the amp
+ */
+int16_t AmplifierClass::GetAmplifierPwmPowerLimitB() {
+
+	return Command.Limits.pwmLimitB;	// Return amp PWM Limit
+}
+
+
+/**
+ * @brief Returns the PWM limit for the amp
+ */
+int16_t AmplifierClass::GetAmplifierPwmPowerLimitC() {
+
+	return Command.Limits.pwmLimitC;	// Return amp PWM Limit
+}
+
+
+/**
+ * @brief Set the state of amplifier limits
+ * @param newState Enable / disable limits
+ */
+void AmplifierClass::SetIsAmplifierPowerLimitApplied( bool newState ) {
+
+	Command.Limits.isAmplifierPowerLimitApplied = newState;
+}
+
+
+/**
+ * @brief Set the flag that limits have been measured
+ * @param newState Toggle flag
+ */
+void AmplifierClass::SetIsAmplifierPowerLimitSet( bool newState ) {
+
+	Command.Limits.isAmplifierPowerLimitSet = newState;
+}
+
+
+/**
+ * @brief Check if limits have been set
+ * @return true Limits set
+ * @return false Limits not set
+ */
+bool AmplifierClass::GetIsAmplifierPowerLimitSet() {
+
+	return Command.Limits.isAmplifierPowerLimitSet;
+}
+
+
+/**
+ * @brief Check if limits are being applied
+ * @return true Limits applied
+ * @return false Limits not applied
+ */
+bool AmplifierClass::GetIsAmplifierPowerLimitApplied() {
+
+	return Command.Limits.isAmplifierPowerLimitApplied;
+}
+
+
+
+/****************
+ * ENCODER LIMITS *
+ ****************/
+
+
+/**
+ * @brief Returns the encoder limit for the amp
+ */
+float AmplifierClass::GetAmplifierEncoderLimitA() {
+
+	return Command.Limits.phiLimitDegA;	   // Return amp PWM Limit
+}
+
+
+/**
+ * @brief Returns the encoder limit for the amp
+ */
+float AmplifierClass::GetAmplifierEncoderLimitB() {
+
+	return Command.Limits.phiLimitDegB;	   // Return amp PWM Limit
+}
+
+
+/**
+ * @brief Returns the encoder limit for the amp
+ */
+float AmplifierClass::GetAmplifierEncoderLimitC() {
+
+	return Command.Limits.phiLimitDegC;	   // Return amp PWM Limit
+}
+
+
+/**
+ * @brief Set the state of amplifier encoder limit
+ * @param newState Enable / disable limits
+ */
+void AmplifierClass::SetIsAmplifierEncoderLimitApplied( bool newState ) {
+
+	Command.Limits.isEncoderLimitApplied = newState;
+}
+
+
+/**
+ * @brief Set the flag that limits have been measured
+ * @param newState Toggle flag
+ */
+void AmplifierClass::SetIsAmplifierEncoderLimitSet( bool newState ) {
+
+	Command.Limits.isEncoderLimitSet = newState;
+}
+
+
+/**
+ * @brief Check if limits have been set
+ * @return true Limits set
+ * @return false Limits not set
+ */
+bool AmplifierClass::GetIsAmplifierEncoderLimitSet() {
+
+	return Command.Limits.isEncoderLimitSet;
+}
+
+
+/**
+ * @brief Check if limits are being applied
+ * @return true Limits applied
+ * @return false Limits not applied
+ */
+bool AmplifierClass::GetIsAmplifierEncoderLimitApplied() {
+
+	return Command.Limits.isEncoderLimitApplied;
+}
+
+
+// /**************
+//  * ENCODER LIMITS *
+//  **************/
+
+
+// /**
+//  * @brief Returns the PWM limit for the amp
+//  */
+// int16_t AmplifierClass::GetAmplifierPowerLimitA() {
+
+// 	return Command.Limits.pwmLimitA;	// Return amp PWM Limit
+// }
+
+
+// /**
+//  * @brief Returns the PWM limit for the amp
+//  */
+// int16_t AmplifierClass::GetAmplifierPowerLimitB() {
+
+// 	return Command.Limits.pwmLimitB;	// Return amp PWM Limit
+// }
+
+
+// /**
+//  * @brief Returns the PWM limit for the amp
+//  */
+// int16_t AmplifierClass::GetAmplifierPowerLimitC() {
+
+// 	return Command.Limits.pwmLimitC;	// Return amp PWM Limit
+// }
+
+
+// /**
+//  * @brief Set the state of amplifier limits
+//  * @param newState Enable / disable limits
+//  */
+// void AmplifierClass::SetIsAmplifierPowerLimitApplied( bool newState ) {
+
+// 	Command.Limits.isAmplifierPowerLimitApplied = newState;
+// }
+
+
+// /**
+//  * @brief Set the flag that limits have been measured
+//  * @param newState Toggle flag
+//  */
+// void AmplifierClass::SetIsAmplfierPowerLimitSet( bool newState ) {
+
+// 	Command.Limits.isAmplifierPowerLimitSet = newState;
+// }
+
+
+// /**
+//  * @brief Check if limits have been set
+//  * @return true Limits set
+//  * @return false Limits not set
+//  */
+// bool AmplifierClass::GetIsAmplifierPowerLimitSet() {
+
+// 	return Command.Limits.isAmplifierPowerLimitSet;
+// }
+
+
+// /**
+//  * @brief Check if limits are being applied
+//  * @return true Limits applied
+//  * @return false Limits not applied
+//  */
+// bool AmplifierClass::GetIsAmplifierPowerLimitApplied() {
+
+// 	return Command.Limits.isAmplifierPowerLimitApplied;
+// }
 
 
 // /*  ===================================================================================
@@ -734,6 +1344,15 @@ float AmplifierClass::GetAngleDegC() {
 //  *  ===================================================================================
 //  *  ===================================================================================*/
 
+/**
+ * @brief Public accessor to drive motor outputs
+ */
+void AmplifierClass::DriveMotorOutputs() {
+
+	// Command PWM
+	CommandPWM();
+}
+
 
 /**
  * @brief Drive the amplifiers
@@ -746,9 +1365,9 @@ void AmplifierClass::CommandPWM() {
 	Command.Pwm.totalOutgoingC = Command.Pwm.outgoingC - Command.Pwm.tensionC;
 
 	// Constrain values to 16-bit range
-	Command.Pwm.totalOutgoingA = constrain( Command.Pwm.totalOutgoingA, Command.Pwm.CONST_PWM_MAX, Command.Pwm.CONST_PWM_ZERO );
-	Command.Pwm.totalOutgoingB = constrain( Command.Pwm.totalOutgoingB, Command.Pwm.CONST_PWM_MAX, Command.Pwm.CONST_PWM_ZERO );
-	Command.Pwm.totalOutgoingC = constrain( Command.Pwm.totalOutgoingC, Command.Pwm.CONST_PWM_MAX, Command.Pwm.CONST_PWM_ZERO );
+	Command.Pwm.totalOutgoingA = constrain( Command.Pwm.totalOutgoingA, CONST_PWM_MAX, CONST_PWM_ZERO );
+	Command.Pwm.totalOutgoingB = constrain( Command.Pwm.totalOutgoingB, CONST_PWM_MAX, CONST_PWM_ZERO );
+	Command.Pwm.totalOutgoingC = constrain( Command.Pwm.totalOutgoingC, CONST_PWM_MAX, CONST_PWM_ZERO );
 
 
 	// Make sure safety switch is engaged and output enabled
@@ -758,6 +1377,7 @@ void AmplifierClass::CommandPWM() {
 		analogWrite( PIN_AMPLIFIER_PWM_A, Command.Pwm.totalOutgoingA );
 		analogWrite( PIN_AMPLIFIER_PWM_B, Command.Pwm.totalOutgoingB );
 		analogWrite( PIN_AMPLIFIER_PWM_C, Command.Pwm.totalOutgoingC );
+
 	} else {
 
 		// Write zeros
@@ -772,9 +1392,9 @@ void AmplifierClass::CommandPWM() {
 void AmplifierClass::CommandZero() {
 
 	// Set total to zero
-	Command.Pwm.totalOutgoingA = Command.Pwm.CONST_PWM_ZERO;
-	Command.Pwm.totalOutgoingB = Command.Pwm.CONST_PWM_ZERO;
-	Command.Pwm.totalOutgoingC = Command.Pwm.CONST_PWM_ZERO;
+	Command.Pwm.totalOutgoingA = CONST_PWM_ZERO;
+	Command.Pwm.totalOutgoingB = CONST_PWM_ZERO;
+	Command.Pwm.totalOutgoingC = CONST_PWM_ZERO;
 
 	// Send zero
 	analogWrite( PIN_AMPLIFIER_PWM_A, Command.Pwm.totalOutgoingA );
@@ -782,6 +1402,101 @@ void AmplifierClass::CommandZero() {
 	analogWrite( PIN_AMPLIFIER_PWM_C, Command.Pwm.totalOutgoingC );
 }
 
+
+// /*  ============================================================================================
+//  *  ============================================================================================
+//  *
+//  *   LL      IIIIII  MM    MM  IIIIII  TTTTTTT T   SSSSS
+//  *   LL        II    MMM  MMM    II       TT      SS
+//  *   LL        II    MM MM MM    II       TT      SS
+//  *   LL        II    MM    MM    II       TT       SSSS
+//  *   LL        II    MM    MM    II       TT          SS
+//  *   LL        II    MM    MM    II       TT          SS
+//  *   LLLLLL  IIIIII  MM    MM  IIIIII     TT      SSSSS
+//  *
+//  *  ============================================================================================
+//  *  ============================================================================================*/
+
+
+
+// === RANGE OF MOTION LIMIT MEASUREMENT ==========================================================
+
+/**
+ * @brief Start measuring ROM
+ */
+void AmplifierClass::StartMeasuringRangeOfMotionLimits() {
+
+	// Check if limit is being measured for the first time
+	if ( isEncoderLimitBeingMeasured == false ) {
+
+		// Update flag
+		isEncoderLimitBeingMeasured = true;
+
+		// Reset limitss
+		Command.Limits.encoderLimitA = 0;
+		Command.Limits.encoderLimitB = 0;
+		Command.Limits.encoderLimitC = 0;
+	}
+}
+
+/**
+ * @brief Stop measuring ROM
+ */
+void AmplifierClass::StopMeasuringRangeOfMotionLimits() {
+
+	// Update flag
+	isEncoderLimitBeingMeasured = false;
+}
+
+
+
+// === OUTPUT CURRENT LIMIT MEASUREMENT ===========================================================
+
+/**
+ * @brief Start measuring the motor current
+ * 
+ * @param ampLetter Which letter to check ('A', 'B', 'C')
+ */
+void AmplifierClass::StartMeasuringCurrentLimits( char ampLetter ) {
+
+	// Check if limit being measured for the first time
+	if ( isCurrentLimitBeingMeasured == false ) {
+
+		// Update flag
+		isCurrentLimitBeingMeasured = true;
+
+		// Reset ramp value
+		currentPwmRampValue = 0;
+
+		// Reset appropriate limits and values
+		if ( ampLetter == 'A' ) {
+			Command.Limits.currentLimitA = 0.0f;
+		} else if ( ampLetter == 'B' ) {
+			Command.Limits.currentLimitB = 0.0f;
+		} else if ( ampLetter == 'C' ) {
+			Command.Limits.currentLimitC = 0.0f;
+		}
+	}
+}
+
+
+
+/**
+ * @brief Stop measuring current
+ */
+void AmplifierClass::StopMeasuringCurrentLimits() {
+
+	// Reset flag
+	isCurrentLimitBeingMeasured = false;
+}
+
+// Press arrow for amp selection
+// Press green to start
+// Ramp up
+// Press red to start
+// Save limit (minus 10%)
+// Don't allow past phi limit
+// In drivePWM, check for "is current being measured" flag, and if so, then ramp up
 
 
 /***
@@ -874,6 +1589,13 @@ bool AmplifierClass::GetSafetySwitchState() {
 
 	// Read state
 	Command.Flags.isSafetySwitchEnabled = digitalReadFast( PIN_AMPLIFIER_SAFETY );
+
+	// Disable amplifier if safety switch is off
+	if ( !Command.Flags.isSafetySwitchEnabled ) {
+		Command.Flags.isOutputEnabled = false;
+	}
+
+	// Return state
 	return Command.Flags.isSafetySwitchEnabled;
 }
 
@@ -1452,805 +2174,805 @@ void AmplifierClass::EnableA() {
 //  */
 // void AmplifierClass::COMMAND_SetTension( uint8_t tensionPercentage ) {
 
- // 	Serial.println( " [pwm]." );
- // }
-
-
- // /**
- //  * @brief Sets amplifier values to zero output (2048 in 12-bit scale)
- //  *
- //  */
- // void AmplifierClass::COMMAND_SetZeroOutput() {
-
- // 	// Set zero values to PWM pins
- // 	Command.commandedPwmA = Command.pwmZero;
- // 	Command.commandedPwmB = Command.pwmZero;
- // 	Command.commandedPwmC = Command.pwmZero;
-
- // 	analogWrite( PIN_AMPLIFIER_PWM_A, Command.commandedPwmA );
- // 	analogWrite( PIN_AMPLIFIER_PWM_B, Command.commandedPwmB );
- // 	analogWrite( PIN_AMPLIFIER_PWM_C, Command.commandedPwmC );
-
- // 	Serial.println( "COMMAND_SetZeroOutput complete" );
- // }
-
- // /**
- //  * @brief Interval timer callback for hardware serial interface
- //  */
- // void AmplifierClass::IT_HWSerial_Callback() {
-
- // 	// Process outgoing query packets
- // 	HWSERIAL_PushQueryA();
- // 	HWSERIAL_PushQueryB();
- // 	HWSERIAL_PushQueryC();
-
- // 	// Process incoming responses
- // 	if ( HWSerialA.available() ) {
- // 		HWSERIAL_ReadQueryResponseA();
- // 	}
- // 	if ( HWSerialB.available() ) {
- // 		HWSERIAL_ReadQueryResponseB();
- // 	}
- // 	if ( HWSerialC.available() ) {
- // 		HWSERIAL_ReadQueryResponseC();
- // 	}
- // }
-
-
- // void AmplifierClass::HWSERIAL_PushAllAndWaitForResponses() {
-
- // 	// Push queries out
- // 	HWSERIAL_PushQueryA();
- // 	delay( 300 );
-
-
- // 	// Wait for responses before proceeding
- // 	while ( HWSerial.isAwaitingResponseA ) {
- // 		Serial.println( "WhileA " );
- // 		if ( HWSerialA.available() ) {
- // 			Serial.println( "AvailA" );
- // 			HWSERIAL_ReadQueryResponseA();
- // 		} else if ( !HWSerialA.available() ) {
- // 			Serial.println( "!AvailA" );
- // 		}
- // 	}
-
-
- // 	HWSERIAL_PushQueryB();
- // 	delay( 300 );
-
- // 	while ( HWSerial.isAwaitingResponseB ) {
- // 		Serial.println( "WhileB " );
- // 		if ( HWSerialB.available() ) {
- // 			Serial.println( "AvailB" );
- // 			HWSERIAL_ReadQueryResponseB();
- // 		} else if ( !HWSerialB.available() ) {
- // 			Serial.println( "!AvailB" );
- // 		}
- // 	}
- // 	delay( 500 );
-
- // 	HWSERIAL_PushQueryC();
- // 	delay( 300 );
-
-
- // 	while ( HWSerial.isAwaitingResponseC ) {
- // 		Serial.println( "WhileC " );
- // 		if ( HWSerialC.available() ) {
- // 			Serial.println( "AvailC" );
- // 			HWSERIAL_ReadQueryResponseC();
- // 		} else if ( !HWSerialC.available() ) {
- // 			Serial.println( "!AvailC" );
- // 		}
- // 	}
- // 	delay( 500 );
- // 	// }
- // 	Serial.println( "HWSERIAL_PushAllAndWaitForResponse complete" );
- // }
-
-
- // /*******************************************
- //  *  HWSerial_EnqueueQuery  - Add to queue  *
- //  *******************************************/
-
- // /**
- //  * @brief Add a new HWSerial query the queue for amplifier A
- //  * @param cmd ASCII command string to send to A
- //  */
- // void AmplifierClass::HWSERIAL_EnqueueQueryA( const String& cmd ) {
- // 	HWSerial.Query.queueA.push( cmd );
- // 	Serial.println( "EnqueueA" );
- // }
-
- // /**
- //  * @brief Add a new HWSerial query the queue for amplifier B
- //  * @param cmd ASCII command string to send to B
- //  */
- // void AmplifierClass::HWSERIAL_EnqueueQueryB( const String& cmd ) {
- // 	HWSerial.Query.queueB.push( cmd );
- // 	Serial.println( "EnqueueB" );
- // }
-
- // /**
- //  * @brief Add a new HWSerial query the queue for amplifier C
- //  * @param cmd ASCII command string to send to C
- //  */
- // void AmplifierClass::HWSERIAL_EnqueueQueryC( const String& cmd ) {
- // 	HWSerial.Query.queueC.push( cmd );
- // 	Serial.println( "EnqueueC" );
- // }
-
-
- // /************************************************
- //  *  HWSerial_ProcessQuery - Process next query  *
- //  ***********************************************/
-
- // /**
- //   * @brief Process the next query in queue A
- //   *
- //   */
- // void AmplifierClass::HWSERIAL_PushQueryA() {
-
- // 	// Check if there isn't already a request in waiting, and the queue isn't empty
- // 	if ( !HWSerial.isAwaitingResponseA && !HWSerial.Query.queueA.empty() ) {
- // 		Serial.println( "PushA" );
- // 		// Extract first query
- // 		HWSerial.Query.outgoingNextA = HWSerial.Query.queueA.front();
- // 		HWSerial.Query.queueA.pop();
-
- // 		// Update
- // 		HWSerial.Query.responseA	 = "";
- // 		HWSerial.isAwaitingResponseA = true;
-
- // 		// Send query
- // 		HWSerialA.clear();
- // 		HWSerialA.print( HWSerial.Query.outgoingNextA );
- // 		// HWSerialA.flush();
- // 	}
- // }
-
- // /**
- //   * @brief Process the next query in queue B
- //   *
- //   */
- // void AmplifierClass::HWSERIAL_PushQueryB() {
-
- // 	// Check if there isn't already a request in waiting, and the queue isn't empty
- // 	if ( !HWSerial.isAwaitingResponseB && !HWSerial.Query.queueB.empty() ) {
- // 		Serial.println( "PushB" );
- // 		// Extract first query
- // 		HWSerial.Query.outgoingNextB = HWSerial.Query.queueB.front();
- // 		HWSerial.Query.queueB.pop();
-
- // 		// Update
- // 		HWSerial.Query.responseB	 = "";
- // 		HWSerial.isAwaitingResponseB = true;
-
- // 		// Send query
- // 		// HWSerialB.clear();
- // 		HWSerialB.print( HWSerial.Query.outgoingNextB );
- // 		// HWSerialB.flush();
- // 	}
- // }
-
- // /**
- //   * @brief Process the next query in queue C
- //   *
- //   */
- // void AmplifierClass::HWSERIAL_PushQueryC() {
-
-
- // 	// Check if there isn't already a request in waiting, and the queue isn't empty
- // 	if ( !HWSerial.isAwaitingResponseC && !HWSerial.Query.queueC.empty() ) {
- // 		Serial.println( "PushC" );
-
- // 		// Extract first query
- // 		HWSerial.Query.outgoingNextC = HWSerial.Query.queueC.front();
- // 		HWSerial.Query.queueC.pop();
-
- // 		// Update
- // 		HWSerial.Query.responseC	 = "";
- // 		HWSerial.isAwaitingResponseC = true;
-
- // 		// Send query
- // 		HWSerialC.clear();
- // 		HWSerialC.print( HWSerial.Query.outgoingNextC );
- // 		// HWSerialC.flush();
- // 	}
- // }
-
-
-
- // /*****************************************************************
- //  *  HWSerial_ReadQueryResponse - checks for and reads responses  *
- //  *****************************************************************/
-
- // /**
- //   * @brief Read the response for amplifier A
- //   *
- //   */
- // void AmplifierClass::HWSERIAL_ReadQueryResponseA() {
-
-
- // 	while ( HWSerialA.available() > 0 ) {
-
- // 		Serial.print( "ReadA " );
-
- // 		// Read character
- // 		char incomingChar = ( char )HWSerialA.read();
-
- // 		// Look for line return
- // 		if ( incomingChar == '\r' || incomingChar == '\n' ) {
-
- // 			// Parse string
- // 			HWSERIAL_ParseResponseA();
- // 			HWSerialA.clear();
- // 		} else {
-
- // 			// Build string
- // 			HWSerial.Query.responseA += incomingChar;
- // 		}
- // 	}
- // }
-
- // /**
- //   * @brief Read the response for amplifier B
- //   *
- //   */
- // void AmplifierClass::HWSERIAL_ReadQueryResponseB() {
-
-
- // 	while ( HWSerialB.available() > 0 ) {
-
- // 		Serial.print( "ReadB " );
- // 		// Read character
- // 		char incomingChar = ( char )HWSerialB.read();
-
- // 		// Look for line return
- // 		if ( incomingChar == '\r' || incomingChar == '\n' ) {
-
- // 			// Parse string
- // 			HWSERIAL_ParseResponseB();
- // 			HWSerialB.clear();
-
- // 		} else {
-
- // 			// Build string
- // 			HWSerial.Query.responseB += incomingChar;
- // 		}
- // 	}
- // }
-
- // /**
- //   * @brief Read the response for amplifier C
- //   *
- //   */
- // void AmplifierClass::HWSERIAL_ReadQueryResponseC() {
-
- // 	while ( HWSerialC.available() > 0 ) {
- // 		Serial.print( "ReadC " );
- // 		// Read character
- // 		char incomingChar = ( char )HWSerialC.read();
-
- // 		// Look for line return
- // 		if ( incomingChar == '\r' || incomingChar == '\n' ) {
-
- // 			// Parse string
- // 			HWSERIAL_ParseResponseC();
- // 			HWSerialC.clear();
- // 		} else {
-
- // 			// Build string
- // 			HWSerial.Query.responseC += incomingChar;
- // 		}
- // 	}
- // }
-
-
-
- // /****************************
- //  *  HWSerial_ParseResponse  *
- //  ****************************/
-
- // /**
- //   * @brief Parse serialA response and save values
- //   *
- //   */
- // void AmplifierClass::HWSERIAL_ParseResponseA() {
-
- // 	Serial.println( "ParseA " );
- // 	// Remove "> " if it exists
- // 	if ( HWSerial.Query.responseA.startsWith( "v " ) ) {
- // 		HWSerial.Query.responseA.remove( 0, 2 );
- // 	}
-
- // 	// Extract response
- // 	String response = HWSerial.Query.responseA;
- // 	Serial.println( "RespA: " );
- // 	Serial.print( HWSerial.Query.outgoingNextA );
- // 	Serial.print( " = " );
- // 	Serial.print( response );
- // 	Serial.println( " " );
-
- // 	// GetBaud
- // 	if ( HWSerial.Query.outgoingNextA == HWSerial.Ascii.getBaud ) {
- // 		Serial.print( "GetBaudA" );
- // 		HWSerial.Connection.baudRateA = response.toInt();
- // 		Serial.print( "  value = " );
- // 		Serial.println( response.toInt() );
- // 	}
- // 	// SetBaud
- // 	else if ( HWSerial.Query.outgoingNextA == HWSerial.Ascii.setBaud115237 ) {
- // 		Serial.print( "SetBaud115237A" );
- // 		HWSerial.Connection.baudRateA = response.toInt();
- // 	}
- // 	// SetCurrentMode
- // 	else if ( HWSerial.Query.outgoingNextA == HWSerial.Ascii.setCurrentMode ) {
- // 		Serial.print( "SetCurrentA" );
- // 		Flags.isCurrentCommandedA = true;
- // 		// dataHandle.getData()->PrintDebug( "SetCurrentMode[A]: " + response );
- // 	}
- // 	// GetName
- // 	else if ( HWSerial.Query.outgoingNextA == HWSerial.Ascii.getName ) {
- // 		HWSerial.Connection.nameStringA = response.substring( 2, HWSerial.Query.responseA.length() );
- // 		Serial.print( "GetNameA" );
- // 		// dataHandle.getData()->PrintDebug( "GetName[A]: " + shared->Amplifier.nameA );
- // 	}
- // 	// GetEncoderCount
- // 	else if ( HWSerial.Query.outgoingNextA == HWSerial.Ascii.getEncoderCount ) {
- // 		const long cnt = strtol( HWSerial.Query.responseA.c_str(), nullptr, 10 );
- // 		Read.countA	   = static_cast<int32_t>( cnt );
- // 		Read.angleDegA = degrees( Read.countA * 2.0f * M_PI / 4096 );
- // 		// dataHandle.getData()->PrintDebug( "GetCount[A]: " + String( shared->Amplifier.encoderMeasuredCountA ) );
- // 	}
- // 	// GetCurrent
- // 	else if ( HWSerial.Query.outgoingNextA == HWSerial.Ascii.getCurrentReading ) {
- // 		Read.currentA = response.toInt();
- // 		// dataHandle.getData()->PrintDebug( "GetCurrent[A]: " + String( shared->Amplifier.currentMeasuredRawA ) );
- // 	}
- // 	// Set encoder zero
- // 	else if ( HWSerial.Query.outgoingNextA == HWSerial.Ascii.setEncoderZero ) {
- // 		// dataHandle.getData()->PrintDebug( "SetEncoderZero[A]: " + String( HWSerial.Query.responseA ) );
- // 	}
-
- // 	// Update
- // 	HWSerial.Query.outgoingNextA = "";
- // 	HWSerial.Query.responseA	 = "";
- // 	HWSerial.isAwaitingResponseA = false;
- // 	// HWSerialA.flush();
- // 	HWSerialA.clear();
- // 	Serial.println( "Completed A" );
- // }
-
- // /**
- //   * @brief Parse serialB response and save values
- //   *
- //   */
- // void AmplifierClass::HWSERIAL_ParseResponseB() {
-
- // 	// Remove "> " if it exists
- // 	if ( HWSerial.Query.responseB.startsWith( "v " ) ) {
- // 		HWSerial.Query.responseB.remove( 0, 2 );
- // 	}
-
- // 	// Extract response
- // 	String response = HWSerial.Query.responseB;
- // 	Serial.println( "RespB: " );
- // 	Serial.print( HWSerial.Query.outgoingNextB );
- // 	Serial.print( " = " );
- // 	Serial.print( response );
- // 	Serial.println( " " );
-
- // 	// GetBaud
- // 	if ( HWSerial.Query.outgoingNextB == HWSerial.Ascii.getBaud ) {
- // 		Serial.print( "GetBaudB" );
- // 		HWSerial.Connection.baudRateB = response.toInt();
- // 		Serial.print( "  value = " );
- // 		Serial.println( response.toInt() );
- // 	}
- // 	// SetBaud
- // 	else if ( HWSerial.Query.outgoingNextB == HWSerial.Ascii.setBaud115237 ) {
- // 		Serial.print( "SetBaud115237B" );
- // 		HWSerial.Connection.baudRateB = response.toInt();
- // 	}
- // 	// SetCurrentMode
- // 	else if ( HWSerial.Query.outgoingNextB == HWSerial.Ascii.setCurrentMode ) {
- // 		Serial.print( "SetCurrentB" );
- // 		Flags.isCurrentCommandedB = true;
- // 		// dataHandle.getData()->PrintDebug( "SetCurrentMode[A]: " + response );
- // 	}
- // 	// GetName
- // 	else if ( HWSerial.Query.outgoingNextB == HWSerial.Ascii.getName ) {
- // 		HWSerial.Connection.nameStringB = response.substring( 2, HWSerial.Query.responseB.length() );
- // 		Serial.print( "GetNameB" );
- // 		// dataHandle.getData()->PrintDebug( "GetName[A]: " + shared->Amplifier.nameA );
- // 	}
- // 	// GetEncoderCount
- // 	else if ( HWSerial.Query.outgoingNextB == HWSerial.Ascii.getEncoderCount ) {
- // 		const long cnt = strtol( HWSerial.Query.responseB.c_str(), nullptr, 10 );
- // 		Read.countB	   = static_cast<int32_t>( cnt );
- // 		Read.angleDegB = degrees( Read.countB * 2.0f * M_PI / 4096 );
- // 		// dataHandle.getData()->PrintDebug( "GetCount[A]: " + String( shared->Amplifier.encoderMeasuredCountA ) );
- // 	}
- // 	// GetCurrent
- // 	else if ( HWSerial.Query.outgoingNextB == HWSerial.Ascii.getCurrentReading ) {
- // 		Read.currentB = response.toInt();
- // 		// dataHandle.getData()->PrintDebug( "GetCurrent[A]: " + String( shared->Amplifier.currentMeasuredRawA ) );
- // 	}
- // 	// Set encoder zero
- // 	else if ( HWSerial.Query.outgoingNextB == HWSerial.Ascii.setEncoderZero ) {
- // 		// dataHandle.getData()->PrintDebug( "SetEncoderZero[A]: " + String( HWSerial.Query.responseA ) );
- // 	}
-
- // 	// Update
- // 	HWSerial.Query.outgoingNextB = "";
- // 	HWSerial.Query.responseB	 = "";
- // 	HWSerial.isAwaitingResponseB = false;
- // 	// HWSerialB.flush();
- // 	HWSerialB.clear();
- // 	Serial.println( "Completed B" );
- // }
-
- // /**
- //   * @brief Parse serialC response and save values
- //   *
- //   */
- // void AmplifierClass::HWSERIAL_ParseResponseC() {
-
- // 	Serial.println( "Parse C" );
-
- // 	// Remove "> " if it exists
- // 	if ( HWSerial.Query.responseC.startsWith( "v " ) ) {
- // 		HWSerial.Query.responseC.remove( 0, 2 );
- // 	}
-
- // 	// Extract response
- // 	String response = HWSerial.Query.responseC;
- // 	Serial.println( "RespC: " );
- // 	Serial.print( HWSerial.Query.outgoingNextC );
- // 	Serial.print( " = " );
- // 	Serial.print( response );
- // 	Serial.println( " " );
-
- // 	// GetBaud
- // 	if ( HWSerial.Query.outgoingNextC == HWSerial.Ascii.getBaud ) {
- // 		Serial.print( "GetBaudC" );
- // 		HWSerial.Connection.baudRateC = response.toInt();
- // 		Serial.print( "  value = " );
- // 		Serial.println( response.toInt() );
- // 	}
- // 	// SetBaud
- // 	else if ( HWSerial.Query.outgoingNextC == HWSerial.Ascii.setBaud115237 ) {
- // 		Serial.print( "SetBaud115237C" );
- // 		HWSerial.Connection.baudRateC = response.toInt();
- // 	}
- // 	// SetCurrentMode
- // 	else if ( HWSerial.Query.outgoingNextC == HWSerial.Ascii.setCurrentMode ) {
- // 		Serial.print( "SetCurrentC" );
- // 		Flags.isCurrentCommandedC = true;
- // 		// dataHandle.getData()->PrintDebug( "SetCurrentMode[A]: " + response );
- // 	}
- // 	// GetName
- // 	else if ( HWSerial.Query.outgoingNextC == HWSerial.Ascii.getName ) {
- // 		HWSerial.Connection.nameStringC = response.substring( 2, HWSerial.Query.responseC.length() );
- // 		Serial.print( "GetNameC" );
- // 		// dataHandle.getData()->PrintDebug( "GetName[A]: " + shared->Amplifier.nameA );
- // 	}
- // 	// GetEncoderCount
- // 	else if ( HWSerial.Query.outgoingNextC == HWSerial.Ascii.getEncoderCount ) {
- // 		const long cnt = strtol( HWSerial.Query.responseC.c_str(), nullptr, 10 );
- // 		Read.countC	   = static_cast<int32_t>( cnt );
- // 		Read.angleDegC = degrees( Read.countC * 2.0f * M_PI / 4096 );
- // 		// dataHandle.getData()->PrintDebug( "GetCount[A]: " + String( shared->Amplifier.encoderMeasuredCountA ) );
- // 	}
- // 	// GetCurrent
- // 	else if ( HWSerial.Query.outgoingNextC == HWSerial.Ascii.getCurrentReading ) {
- // 		Read.currentC = response.toInt();
- // 		// dataHandle.getData()->PrintDebug( "GetCurrent[A]: " + String( shared->Amplifier.currentMeasuredRawA ) );
- // 	}
- // 	// Set encoder zero
- // 	else if ( HWSerial.Query.outgoingNextC == HWSerial.Ascii.setEncoderZero ) {
- // 		// dataHandle.getData()->PrintDebug( "SetEncoderZero[A]: " + String( HWSerial.Query.responseA ) );
- // 	}
-
- // 	// Update
- // 	HWSerial.Query.outgoingNextC = "";
- // 	HWSerial.Query.responseC	 = "";
- // 	HWSerial.isAwaitingResponseC = false;
- // 	// HWSerialC.flush();
- // 	HWSerialC.clear();
- // 	Serial.println( "Completed C" );
- // }
-
-
-
- // void AmplifierClass::HWSERIAL_GetAmplifierNames() {
-
- // 	// Queue up commands
- // 	HWSERIAL_EnqueueQueryA( HWSerial.Ascii.getName );
- // 	HWSERIAL_EnqueueQueryB( HWSerial.Ascii.getName );
-
- // 	// Push queries
- // 	HWSERIAL_EnqueueQueryC( HWSerial.Ascii.getName );
- // 	HWSERIAL_PushQueryA();
- // 	HWSERIAL_PushQueryB();
- // 	HWSERIAL_PushQueryC();
-
- // 	delay( 100 );
-
- // 	// Check responses
- // 	if ( HWSerialA.available() ) {
- // 		HWSERIAL_ReadQueryResponseA();
- // 	}
- // 	if ( HWSerialB.available() ) {
- // 		HWSERIAL_ReadQueryResponseB();
- // 	}
- // 	if ( HWSerialC.available() ) {
- // 		HWSERIAL_ReadQueryResponseC();
- // 	}
-
- // 	delay( 100 );
- // }
-
-
- // /*  =========================================
- //  *  =========================================
- //  *
- //  *   FFFFFF  LL      AAAAA    GGGGG    SSSS
- //  *   FF      LL     AA   AA  GG   GG  SS
- //  *   FF      LL     AA   AA  GG       SS
- //  *   FFFF    LL     AAAAAAA  GG  GGG   SSSS
- //  *   FF      LL     AA   AA  GG   GG      SS
- //  *   FF      LL     AA   AA  GG   GG      SS
- //  *   FF      LLLLL  AA   AA   GGGGG    SSSS
- //  *
- //  *  =========================================
- //  *  ========================================= */
-
- // /**
- //  * @brief Returns the state of the safety switch
- //  *
- //  * @return true Safety switch engaged, system enabled
- //  * @return false Safety switch disengaged, system disabled
- //  */
- // bool AmplifierClass::FLAGS_GetSafetySwitchState() {
-
- // 	// Read state
- // 	Flags.isSafetySwitchEnabled = digitalReadFast( PIN_AMPLIFIER_SAFETY );
- // 	return Flags.isSafetySwitchEnabled;
- // }
-
- // /**
- //  * @brief Get the string representing the class state
- //  * @return String text of any class updates / states
- //  */
- // String AmplifierClass::FLAGS_GetStateStringA() {
- // 	return "INCOMPLETE";
- // }
-
- // /**
- //  * @brief Get the string representing the class state
- //  * @return String text of any class updates / states
- //  */
- // String AmplifierClass::FLAGS_GetStateStringB() {
- // 	return "INCOMPLETE";
- // }
-
- // /**
- //  * @brief Get the string representing the class state
- //  * @return String text of any class updates / states
- //  */
- // String AmplifierClass::FLAGS_GetStateStringC() {
- // 	return "INCOMPLETE";
- // }
-
- // /**
- //  * @brief Check if amplifiers are active
- //  * @return true Amplfiers running
- //  * @return false Amplifiers disabled
- //  */
- // bool AmplifierClass::FLAGS_GetAmplifierState() {
-
- // 	return ( Flags.isEnabled );
- // }
-
-
-
- // /*  ======================================
- //  *  ======================================
- //  *
- //  *   RRRRR     EEEEEE    AAAAAAA    DDDDD
- //  *   RR  RR    EE        AA   AA    DD  DD
- //  *   RR  RR    EE        AA   AA    DD  DD
- //  *   RRRRR     EEEE      AAAAAAA    DD  DD
- //  *   RR  RR    EE        AA   AA    DD  DD
- //  *   RR  RR    EE        AA   AA    DD  DD
- //  *   RR   RR   EEEEEE    AA   AA    DDDDD
- //  *
- //  *  ======================================
- //  *  ======================================*/
-
- // /**
- //  * @brief Read encoders using HWserial
- //  */
- // void AmplifierClass::HWSERIAL_GetEncoderValues() {
-
- // 	// Send serial command to read encoder
- // 	HWSERIAL_EnqueueQueryA( HWSerial.Ascii.getEncoderCount );
- // 	HWSERIAL_EnqueueQueryB( HWSerial.Ascii.getEncoderCount );
- // 	HWSERIAL_EnqueueQueryC( HWSerial.Ascii.getEncoderCount );
- // }
-
- // /**
- //  * @brief Read amplifier baud rate
- //  */
- // void AmplifierClass::HWSERIAL_GetAmplifierBaudRates() {
-
- // 	Serial.println( "Entering HWSERIAL_GetAmplifierBaudRates" );
-
-
- // 	// A
- // 	HWSERIAL_EnqueueQueryA(HWSerial.Ascii.getBaud);
- // 	delay(50);
- // 	HWSERIAL_PushQueryA();
- // 	HWSERIAL_WaitForPortA(500);           // no Serial spam, has timeout
- // 	// no HWSerialA.clear() here
-
- // 	// B
- // 	HWSERIAL_EnqueueQueryB(HWSerial.Ascii.getBaud);
- // 	delay(50);
- // 	HWSERIAL_PushQueryB();
- // 	HWSERIAL_WaitForPortB(500);
- // 	// no HWSerialB.clear()
-
- // 	// C
- // 	HWSERIAL_EnqueueQueryC(HWSerial.Ascii.getBaud);
- // 	delay(50);
- // 	HWSERIAL_PushQueryC();
- // 	HWSERIAL_WaitForPortC(500);
- // 	// no HWSerialC.clear()
-
- // 	Serial.print(F("Baud rates: A = "));
- // 	Serial.print(HWSerial.Connection.baudRateA);
- // 	Serial.print(F(", B = "));
- // 	Serial.print(HWSerial.Connection.baudRateB);
- // 	Serial.print(F(", C = "));
- // 	Serial.println(HWSerial.Connection.baudRateC);
-
- // 	Serial.println("HWSERIAL_GetAmplifierBaudRates complete");
-
-
- // 	// // Enqueue command
- // 	// HWSERIAL_EnqueueQueryA( HWSerial.Ascii.getBaud );
- // 	// delay( 100 );
-
- // 	// // Push queries out
- // 	// HWSERIAL_PushQueryA();
- // 	// delay( 300 );
-
- // 	// HWSerialA.flush();
-
- // 	// // Wait for responses before proceeding
- // 	// while ( HWSerial.isAwaitingResponseA ) {
- // 	// 	Serial.println( "WhileA " );
- // 	// 	if ( HWSerialA.available() ) {
- // 	// 		Serial.println( "AvailA" );
- // 	// 		HWSERIAL_ReadQueryResponseA();
- // 	// 	} else if ( !HWSerialA.available() ) {
- // 	// 		Serial.println( "!AvailA" );
- // 	// 	}
- // 	// }
- // 	// delay(300) ;
-
-
-
- // 	// HWSERIAL_EnqueueQueryB( HWSerial.Ascii.getBaud );
- // 	// delay( 100 );
-
- // 	// HWSERIAL_PushQueryB();
- // 	// delay( 300 );
-
- // 	// HWSerialB.flush();
- // 	// while ( HWSerial.isAwaitingResponseB ) {
- // 	// 	Serial.println( "WhileB " );
- // 	// 	if ( HWSerialB.available() ) {
- // 	// 		Serial.println( "AvailB" );
- // 	// 		HWSERIAL_ReadQueryResponseB();
- // 	// 	} else if ( !HWSerialB.available() ) {
- // 	// 		Serial.println( "!AvailB" );
- // 	// 	}
- // 	// }
- // 	// delay(300) ;
-
-
-
- // 	// HWSERIAL_EnqueueQueryC( HWSerial.Ascii.getBaud );
- // 	// delay( 100 );
- // 	// HWSERIAL_PushQueryC();
- // 	// delay( 300 );
- // 	// HWSerialC.flush();
-
- // 	// while ( HWSerial.isAwaitingResponseC ) {
- // 	// 	Serial.println( "WhileC " );
- // 	// 	if ( HWSerialC.available() ) {
- // 	// 		Serial.println( "AvailC" );
- // 	// 		HWSERIAL_ReadQueryResponseC();
- // 	// 	} else if ( !HWSerialC.available() ) {
- // 	// 		Serial.println( "!AvailC" );
- // 	// 	}
- // 	// }
- // 	// delay(300) ;
- // 	// // HWSerialC.clear();
-
-
- // 	// // Wait for responses
- // 	// // HWSERIAL_PushAllAndWaitForResponses();
-
- // 	// // Print baud rates
- // 	// Serial.print( F( "Baud rates: A = " ) );
- // 	// Serial.print( HWSerial.Connection.baudRateA );
- // 	// Serial.print( F( ", B = " ) );
- // 	// Serial.print( HWSerial.Connection.baudRateB );
- // 	// Serial.print( F( ", C = " ) );
- // 	// Serial.print( HWSerial.Connection.baudRateC );
- // 	// Serial.println();
-
- // 	Serial.println( "HWSERIAL_GetAmplifierBaudRates complete" );
- // }
-
-
- // /**
- //  * @brief Gets the encoder count from motor A
- //  * @return int32_t encoder count in ticks
- //  */
- // int32_t AmplifierClass::READ_GetCountA() {
-
- // 	return Read.countA;
- // }
-
- // /**
- //  * @brief Gets the encoder count from motor B
- //  * @return int32_t encoder count in ticks
- //  */
- // int32_t AmplifierClass::READ_GetCountB() {
-
- // 	return Read.countB;
- // }
-
- // /**
- //  * @brief Gets the encoder count from motor C
- //  * @return int32_t encoder count in ticks
- //  */
- // int32_t AmplifierClass::READ_GetCountC() {
-
- // 	return Read.countC;
- // }
-
-
-
- // /**
- //  * @brief Gets the encoder count from motor A
- //  * @return float encoder count in degrees
- //  */
- // float AmplifierClass::READ_GetAngleDegA() {
-
- // 	return Read.angleDegA;
- // }
-
- // /**
- //  * @brief Gets the encoder count from motor B
- //  * @return float encoder count in degrees
- //  */
- // float AmplifierClass::READ_GetAngleDegB() {
-
- // 	return Read.angleDegB;
- // }
-
- // /**
- //  * @brief Gets the encoder count from motor C
- //  * @return float encoder count in degrees
- //  */
- // float AmplifierClass::READ_GetAngleDegC() {
-
- // 	return Read.angleDegC;
- // }
+// 	Serial.println( " [pwm]." );
+// }
+
+
+// /**
+//  * @brief Sets amplifier values to zero output (2048 in 12-bit scale)
+//  *
+//  */
+// void AmplifierClass::COMMAND_SetZeroOutput() {
+
+// 	// Set zero values to PWM pins
+// 	Command.commandedPwmA = Command.pwmZero;
+// 	Command.commandedPwmB = Command.pwmZero;
+// 	Command.commandedPwmC = Command.pwmZero;
+
+// 	analogWrite( PIN_AMPLIFIER_PWM_A, Command.commandedPwmA );
+// 	analogWrite( PIN_AMPLIFIER_PWM_B, Command.commandedPwmB );
+// 	analogWrite( PIN_AMPLIFIER_PWM_C, Command.commandedPwmC );
+
+// 	Serial.println( "COMMAND_SetZeroOutput complete" );
+// }
+
+// /**
+//  * @brief Interval timer callback for hardware serial interface
+//  */
+// void AmplifierClass::IT_HWSerial_Callback() {
+
+// 	// Process outgoing query packets
+// 	HWSERIAL_PushQueryA();
+// 	HWSERIAL_PushQueryB();
+// 	HWSERIAL_PushQueryC();
+
+// 	// Process incoming responses
+// 	if ( HWSerialA.available() ) {
+// 		HWSERIAL_ReadQueryResponseA();
+// 	}
+// 	if ( HWSerialB.available() ) {
+// 		HWSERIAL_ReadQueryResponseB();
+// 	}
+// 	if ( HWSerialC.available() ) {
+// 		HWSERIAL_ReadQueryResponseC();
+// 	}
+// }
+
+
+// void AmplifierClass::HWSERIAL_PushAllAndWaitForResponses() {
+
+// 	// Push queries out
+// 	HWSERIAL_PushQueryA();
+// 	delay( 300 );
+
+
+// 	// Wait for responses before proceeding
+// 	while ( HWSerial.isAwaitingResponseA ) {
+// 		Serial.println( "WhileA " );
+// 		if ( HWSerialA.available() ) {
+// 			Serial.println( "AvailA" );
+// 			HWSERIAL_ReadQueryResponseA();
+// 		} else if ( !HWSerialA.available() ) {
+// 			Serial.println( "!AvailA" );
+// 		}
+// 	}
+
+
+// 	HWSERIAL_PushQueryB();
+// 	delay( 300 );
+
+// 	while ( HWSerial.isAwaitingResponseB ) {
+// 		Serial.println( "WhileB " );
+// 		if ( HWSerialB.available() ) {
+// 			Serial.println( "AvailB" );
+// 			HWSERIAL_ReadQueryResponseB();
+// 		} else if ( !HWSerialB.available() ) {
+// 			Serial.println( "!AvailB" );
+// 		}
+// 	}
+// 	delay( 500 );
+
+// 	HWSERIAL_PushQueryC();
+// 	delay( 300 );
+
+
+// 	while ( HWSerial.isAwaitingResponseC ) {
+// 		Serial.println( "WhileC " );
+// 		if ( HWSerialC.available() ) {
+// 			Serial.println( "AvailC" );
+// 			HWSERIAL_ReadQueryResponseC();
+// 		} else if ( !HWSerialC.available() ) {
+// 			Serial.println( "!AvailC" );
+// 		}
+// 	}
+// 	delay( 500 );
+// 	// }
+// 	Serial.println( "HWSERIAL_PushAllAndWaitForResponse complete" );
+// }
+
+
+// /*******************************************
+//  *  HWSerial_EnqueueQuery  - Add to queue  *
+//  *******************************************/
+
+// /**
+//  * @brief Add a new HWSerial query the queue for amplifier A
+//  * @param cmd ASCII command string to send to A
+//  */
+// void AmplifierClass::HWSERIAL_EnqueueQueryA( const String& cmd ) {
+// 	HWSerial.Query.queueA.push( cmd );
+// 	Serial.println( "EnqueueA" );
+// }
+
+// /**
+//  * @brief Add a new HWSerial query the queue for amplifier B
+//  * @param cmd ASCII command string to send to B
+//  */
+// void AmplifierClass::HWSERIAL_EnqueueQueryB( const String& cmd ) {
+// 	HWSerial.Query.queueB.push( cmd );
+// 	Serial.println( "EnqueueB" );
+// }
+
+// /**
+//  * @brief Add a new HWSerial query the queue for amplifier C
+//  * @param cmd ASCII command string to send to C
+//  */
+// void AmplifierClass::HWSERIAL_EnqueueQueryC( const String& cmd ) {
+// 	HWSerial.Query.queueC.push( cmd );
+// 	Serial.println( "EnqueueC" );
+// }
+
+
+// /************************************************
+//  *  HWSerial_ProcessQuery - Process next query  *
+//  ***********************************************/
+
+// /**
+//   * @brief Process the next query in queue A
+//   *
+//   */
+// void AmplifierClass::HWSERIAL_PushQueryA() {
+
+// 	// Check if there isn't already a request in waiting, and the queue isn't empty
+// 	if ( !HWSerial.isAwaitingResponseA && !HWSerial.Query.queueA.empty() ) {
+// 		Serial.println( "PushA" );
+// 		// Extract first query
+// 		HWSerial.Query.outgoingNextA = HWSerial.Query.queueA.front();
+// 		HWSerial.Query.queueA.pop();
+
+// 		// Update
+// 		HWSerial.Query.responseA	 = "";
+// 		HWSerial.isAwaitingResponseA = true;
+
+// 		// Send query
+// 		HWSerialA.clear();
+// 		HWSerialA.print( HWSerial.Query.outgoingNextA );
+// 		// HWSerialA.flush();
+// 	}
+// }
+
+// /**
+//   * @brief Process the next query in queue B
+//   *
+//   */
+// void AmplifierClass::HWSERIAL_PushQueryB() {
+
+// 	// Check if there isn't already a request in waiting, and the queue isn't empty
+// 	if ( !HWSerial.isAwaitingResponseB && !HWSerial.Query.queueB.empty() ) {
+// 		Serial.println( "PushB" );
+// 		// Extract first query
+// 		HWSerial.Query.outgoingNextB = HWSerial.Query.queueB.front();
+// 		HWSerial.Query.queueB.pop();
+
+// 		// Update
+// 		HWSerial.Query.responseB	 = "";
+// 		HWSerial.isAwaitingResponseB = true;
+
+// 		// Send query
+// 		// HWSerialB.clear();
+// 		HWSerialB.print( HWSerial.Query.outgoingNextB );
+// 		// HWSerialB.flush();
+// 	}
+// }
+
+// /**
+//   * @brief Process the next query in queue C
+//   *
+//   */
+// void AmplifierClass::HWSERIAL_PushQueryC() {
+
+
+// 	// Check if there isn't already a request in waiting, and the queue isn't empty
+// 	if ( !HWSerial.isAwaitingResponseC && !HWSerial.Query.queueC.empty() ) {
+// 		Serial.println( "PushC" );
+
+// 		// Extract first query
+// 		HWSerial.Query.outgoingNextC = HWSerial.Query.queueC.front();
+// 		HWSerial.Query.queueC.pop();
+
+// 		// Update
+// 		HWSerial.Query.responseC	 = "";
+// 		HWSerial.isAwaitingResponseC = true;
+
+// 		// Send query
+// 		HWSerialC.clear();
+// 		HWSerialC.print( HWSerial.Query.outgoingNextC );
+// 		// HWSerialC.flush();
+// 	}
+// }
+
+
+
+// /*****************************************************************
+//  *  HWSerial_ReadQueryResponse - checks for and reads responses  *
+//  *****************************************************************/
+
+// /**
+//   * @brief Read the response for amplifier A
+//   *
+//   */
+// void AmplifierClass::HWSERIAL_ReadQueryResponseA() {
+
+
+// 	while ( HWSerialA.available() > 0 ) {
+
+// 		Serial.print( "ReadA " );
+
+// 		// Read character
+// 		char incomingChar = ( char )HWSerialA.read();
+
+// 		// Look for line return
+// 		if ( incomingChar == '\r' || incomingChar == '\n' ) {
+
+// 			// Parse string
+// 			HWSERIAL_ParseResponseA();
+// 			HWSerialA.clear();
+// 		} else {
+
+// 			// Build string
+// 			HWSerial.Query.responseA += incomingChar;
+// 		}
+// 	}
+// }
+
+// /**
+//   * @brief Read the response for amplifier B
+//   *
+//   */
+// void AmplifierClass::HWSERIAL_ReadQueryResponseB() {
+
+
+// 	while ( HWSerialB.available() > 0 ) {
+
+// 		Serial.print( "ReadB " );
+// 		// Read character
+// 		char incomingChar = ( char )HWSerialB.read();
+
+// 		// Look for line return
+// 		if ( incomingChar == '\r' || incomingChar == '\n' ) {
+
+// 			// Parse string
+// 			HWSERIAL_ParseResponseB();
+// 			HWSerialB.clear();
+
+// 		} else {
+
+// 			// Build string
+// 			HWSerial.Query.responseB += incomingChar;
+// 		}
+// 	}
+// }
+
+// /**
+//   * @brief Read the response for amplifier C
+//   *
+//   */
+// void AmplifierClass::HWSERIAL_ReadQueryResponseC() {
+
+// 	while ( HWSerialC.available() > 0 ) {
+// 		Serial.print( "ReadC " );
+// 		// Read character
+// 		char incomingChar = ( char )HWSerialC.read();
+
+// 		// Look for line return
+// 		if ( incomingChar == '\r' || incomingChar == '\n' ) {
+
+// 			// Parse string
+// 			HWSERIAL_ParseResponseC();
+// 			HWSerialC.clear();
+// 		} else {
+
+// 			// Build string
+// 			HWSerial.Query.responseC += incomingChar;
+// 		}
+// 	}
+// }
+
+
+
+// /****************************
+//  *  HWSerial_ParseResponse  *
+//  ****************************/
+
+// /**
+//   * @brief Parse serialA response and save values
+//   *
+//   */
+// void AmplifierClass::HWSERIAL_ParseResponseA() {
+
+// 	Serial.println( "ParseA " );
+// 	// Remove "> " if it exists
+// 	if ( HWSerial.Query.responseA.startsWith( "v " ) ) {
+// 		HWSerial.Query.responseA.remove( 0, 2 );
+// 	}
+
+// 	// Extract response
+// 	String response = HWSerial.Query.responseA;
+// 	Serial.println( "RespA: " );
+// 	Serial.print( HWSerial.Query.outgoingNextA );
+// 	Serial.print( " = " );
+// 	Serial.print( response );
+// 	Serial.println( " " );
+
+// 	// GetBaud
+// 	if ( HWSerial.Query.outgoingNextA == HWSerial.Ascii.getBaud ) {
+// 		Serial.print( "GetBaudA" );
+// 		HWSerial.Connection.baudRateA = response.toInt();
+// 		Serial.print( "  value = " );
+// 		Serial.println( response.toInt() );
+// 	}
+// 	// SetBaud
+// 	else if ( HWSerial.Query.outgoingNextA == HWSerial.Ascii.setBaud115237 ) {
+// 		Serial.print( "SetBaud115237A" );
+// 		HWSerial.Connection.baudRateA = response.toInt();
+// 	}
+// 	// SetCurrentMode
+// 	else if ( HWSerial.Query.outgoingNextA == HWSerial.Ascii.setCurrentMode ) {
+// 		Serial.print( "SetCurrentA" );
+// 		Flags.isCurrentCommandedA = true;
+// 		// dataHandle.getData()->PrintDebug( "SetCurrentMode[A]: " + response );
+// 	}
+// 	// GetName
+// 	else if ( HWSerial.Query.outgoingNextA == HWSerial.Ascii.getName ) {
+// 		HWSerial.Connection.nameStringA = response.substring( 2, HWSerial.Query.responseA.length() );
+// 		Serial.print( "GetNameA" );
+// 		// dataHandle.getData()->PrintDebug( "GetName[A]: " + shared->Amplifier.nameA );
+// 	}
+// 	// GetEncoderCount
+// 	else if ( HWSerial.Query.outgoingNextA == HWSerial.Ascii.getEncoderCount ) {
+// 		const long cnt = strtol( HWSerial.Query.responseA.c_str(), nullptr, 10 );
+// 		Read.countA	   = static_cast<int32_t>( cnt );
+// 		Read.angleDegA = degrees( Read.countA * 2.0f * M_PI / 4096 );
+// 		// dataHandle.getData()->PrintDebug( "GetCount[A]: " + String( shared->Amplifier.encoderMeasuredCountA ) );
+// 	}
+// 	// GetCurrent
+// 	else if ( HWSerial.Query.outgoingNextA == HWSerial.Ascii.getCurrentReading ) {
+// 		Read.currentA = response.toInt();
+// 		// dataHandle.getData()->PrintDebug( "GetCurrent[A]: " + String( shared->Amplifier.currentMeasuredRawA ) );
+// 	}
+// 	// Set encoder zero
+// 	else if ( HWSerial.Query.outgoingNextA == HWSerial.Ascii.setEncoderZero ) {
+// 		// dataHandle.getData()->PrintDebug( "SetEncoderZero[A]: " + String( HWSerial.Query.responseA ) );
+// 	}
+
+// 	// Update
+// 	HWSerial.Query.outgoingNextA = "";
+// 	HWSerial.Query.responseA	 = "";
+// 	HWSerial.isAwaitingResponseA = false;
+// 	// HWSerialA.flush();
+// 	HWSerialA.clear();
+// 	Serial.println( "Completed A" );
+// }
+
+// /**
+//   * @brief Parse serialB response and save values
+//   *
+//   */
+// void AmplifierClass::HWSERIAL_ParseResponseB() {
+
+// 	// Remove "> " if it exists
+// 	if ( HWSerial.Query.responseB.startsWith( "v " ) ) {
+// 		HWSerial.Query.responseB.remove( 0, 2 );
+// 	}
+
+// 	// Extract response
+// 	String response = HWSerial.Query.responseB;
+// 	Serial.println( "RespB: " );
+// 	Serial.print( HWSerial.Query.outgoingNextB );
+// 	Serial.print( " = " );
+// 	Serial.print( response );
+// 	Serial.println( " " );
+
+// 	// GetBaud
+// 	if ( HWSerial.Query.outgoingNextB == HWSerial.Ascii.getBaud ) {
+// 		Serial.print( "GetBaudB" );
+// 		HWSerial.Connection.baudRateB = response.toInt();
+// 		Serial.print( "  value = " );
+// 		Serial.println( response.toInt() );
+// 	}
+// 	// SetBaud
+// 	else if ( HWSerial.Query.outgoingNextB == HWSerial.Ascii.setBaud115237 ) {
+// 		Serial.print( "SetBaud115237B" );
+// 		HWSerial.Connection.baudRateB = response.toInt();
+// 	}
+// 	// SetCurrentMode
+// 	else if ( HWSerial.Query.outgoingNextB == HWSerial.Ascii.setCurrentMode ) {
+// 		Serial.print( "SetCurrentB" );
+// 		Flags.isCurrentCommandedB = true;
+// 		// dataHandle.getData()->PrintDebug( "SetCurrentMode[A]: " + response );
+// 	}
+// 	// GetName
+// 	else if ( HWSerial.Query.outgoingNextB == HWSerial.Ascii.getName ) {
+// 		HWSerial.Connection.nameStringB = response.substring( 2, HWSerial.Query.responseB.length() );
+// 		Serial.print( "GetNameB" );
+// 		// dataHandle.getData()->PrintDebug( "GetName[A]: " + shared->Amplifier.nameA );
+// 	}
+// 	// GetEncoderCount
+// 	else if ( HWSerial.Query.outgoingNextB == HWSerial.Ascii.getEncoderCount ) {
+// 		const long cnt = strtol( HWSerial.Query.responseB.c_str(), nullptr, 10 );
+// 		Read.countB	   = static_cast<int32_t>( cnt );
+// 		Read.angleDegB = degrees( Read.countB * 2.0f * M_PI / 4096 );
+// 		// dataHandle.getData()->PrintDebug( "GetCount[A]: " + String( shared->Amplifier.encoderMeasuredCountA ) );
+// 	}
+// 	// GetCurrent
+// 	else if ( HWSerial.Query.outgoingNextB == HWSerial.Ascii.getCurrentReading ) {
+// 		Read.currentB = response.toInt();
+// 		// dataHandle.getData()->PrintDebug( "GetCurrent[A]: " + String( shared->Amplifier.currentMeasuredRawA ) );
+// 	}
+// 	// Set encoder zero
+// 	else if ( HWSerial.Query.outgoingNextB == HWSerial.Ascii.setEncoderZero ) {
+// 		// dataHandle.getData()->PrintDebug( "SetEncoderZero[A]: " + String( HWSerial.Query.responseA ) );
+// 	}
+
+// 	// Update
+// 	HWSerial.Query.outgoingNextB = "";
+// 	HWSerial.Query.responseB	 = "";
+// 	HWSerial.isAwaitingResponseB = false;
+// 	// HWSerialB.flush();
+// 	HWSerialB.clear();
+// 	Serial.println( "Completed B" );
+// }
+
+// /**
+//   * @brief Parse serialC response and save values
+//   *
+//   */
+// void AmplifierClass::HWSERIAL_ParseResponseC() {
+
+// 	Serial.println( "Parse C" );
+
+// 	// Remove "> " if it exists
+// 	if ( HWSerial.Query.responseC.startsWith( "v " ) ) {
+// 		HWSerial.Query.responseC.remove( 0, 2 );
+// 	}
+
+// 	// Extract response
+// 	String response = HWSerial.Query.responseC;
+// 	Serial.println( "RespC: " );
+// 	Serial.print( HWSerial.Query.outgoingNextC );
+// 	Serial.print( " = " );
+// 	Serial.print( response );
+// 	Serial.println( " " );
+
+// 	// GetBaud
+// 	if ( HWSerial.Query.outgoingNextC == HWSerial.Ascii.getBaud ) {
+// 		Serial.print( "GetBaudC" );
+// 		HWSerial.Connection.baudRateC = response.toInt();
+// 		Serial.print( "  value = " );
+// 		Serial.println( response.toInt() );
+// 	}
+// 	// SetBaud
+// 	else if ( HWSerial.Query.outgoingNextC == HWSerial.Ascii.setBaud115237 ) {
+// 		Serial.print( "SetBaud115237C" );
+// 		HWSerial.Connection.baudRateC = response.toInt();
+// 	}
+// 	// SetCurrentMode
+// 	else if ( HWSerial.Query.outgoingNextC == HWSerial.Ascii.setCurrentMode ) {
+// 		Serial.print( "SetCurrentC" );
+// 		Flags.isCurrentCommandedC = true;
+// 		// dataHandle.getData()->PrintDebug( "SetCurrentMode[A]: " + response );
+// 	}
+// 	// GetName
+// 	else if ( HWSerial.Query.outgoingNextC == HWSerial.Ascii.getName ) {
+// 		HWSerial.Connection.nameStringC = response.substring( 2, HWSerial.Query.responseC.length() );
+// 		Serial.print( "GetNameC" );
+// 		// dataHandle.getData()->PrintDebug( "GetName[A]: " + shared->Amplifier.nameA );
+// 	}
+// 	// GetEncoderCount
+// 	else if ( HWSerial.Query.outgoingNextC == HWSerial.Ascii.getEncoderCount ) {
+// 		const long cnt = strtol( HWSerial.Query.responseC.c_str(), nullptr, 10 );
+// 		Read.countC	   = static_cast<int32_t>( cnt );
+// 		Read.angleDegC = degrees( Read.countC * 2.0f * M_PI / 4096 );
+// 		// dataHandle.getData()->PrintDebug( "GetCount[A]: " + String( shared->Amplifier.encoderMeasuredCountA ) );
+// 	}
+// 	// GetCurrent
+// 	else if ( HWSerial.Query.outgoingNextC == HWSerial.Ascii.getCurrentReading ) {
+// 		Read.currentC = response.toInt();
+// 		// dataHandle.getData()->PrintDebug( "GetCurrent[A]: " + String( shared->Amplifier.currentMeasuredRawA ) );
+// 	}
+// 	// Set encoder zero
+// 	else if ( HWSerial.Query.outgoingNextC == HWSerial.Ascii.setEncoderZero ) {
+// 		// dataHandle.getData()->PrintDebug( "SetEncoderZero[A]: " + String( HWSerial.Query.responseA ) );
+// 	}
+
+// 	// Update
+// 	HWSerial.Query.outgoingNextC = "";
+// 	HWSerial.Query.responseC	 = "";
+// 	HWSerial.isAwaitingResponseC = false;
+// 	// HWSerialC.flush();
+// 	HWSerialC.clear();
+// 	Serial.println( "Completed C" );
+// }
+
+
+
+// void AmplifierClass::HWSERIAL_GetAmplifierNames() {
+
+// 	// Queue up commands
+// 	HWSERIAL_EnqueueQueryA( HWSerial.Ascii.getName );
+// 	HWSERIAL_EnqueueQueryB( HWSerial.Ascii.getName );
+
+// 	// Push queries
+// 	HWSERIAL_EnqueueQueryC( HWSerial.Ascii.getName );
+// 	HWSERIAL_PushQueryA();
+// 	HWSERIAL_PushQueryB();
+// 	HWSERIAL_PushQueryC();
+
+// 	delay( 100 );
+
+// 	// Check responses
+// 	if ( HWSerialA.available() ) {
+// 		HWSERIAL_ReadQueryResponseA();
+// 	}
+// 	if ( HWSerialB.available() ) {
+// 		HWSERIAL_ReadQueryResponseB();
+// 	}
+// 	if ( HWSerialC.available() ) {
+// 		HWSERIAL_ReadQueryResponseC();
+// 	}
+
+// 	delay( 100 );
+// }
+
+
+// /*  =========================================
+//  *  =========================================
+//  *
+//  *   FFFFFF  LL      AAAAA    GGGGG    SSSS
+//  *   FF      LL     AA   AA  GG   GG  SS
+//  *   FF      LL     AA   AA  GG       SS
+//  *   FFFF    LL     AAAAAAA  GG  GGG   SSSS
+//  *   FF      LL     AA   AA  GG   GG      SS
+//  *   FF      LL     AA   AA  GG   GG      SS
+//  *   FF      LLLLL  AA   AA   GGGGG    SSSS
+//  *
+//  *  =========================================
+//  *  ========================================= */
+
+// /**
+//  * @brief Returns the state of the safety switch
+//  *
+//  * @return true Safety switch engaged, system enabled
+//  * @return false Safety switch disengaged, system disabled
+//  */
+// bool AmplifierClass::FLAGS_GetSafetySwitchState() {
+
+// 	// Read state
+// 	Flags.isSafetySwitchEnabled = digitalReadFast( PIN_AMPLIFIER_SAFETY );
+// 	return Flags.isSafetySwitchEnabled;
+// }
+
+// /**
+//  * @brief Get the string representing the class state
+//  * @return String text of any class updates / states
+//  */
+// String AmplifierClass::FLAGS_GetStateStringA() {
+// 	return "INCOMPLETE";
+// }
+
+// /**
+//  * @brief Get the string representing the class state
+//  * @return String text of any class updates / states
+//  */
+// String AmplifierClass::FLAGS_GetStateStringB() {
+// 	return "INCOMPLETE";
+// }
+
+// /**
+//  * @brief Get the string representing the class state
+//  * @return String text of any class updates / states
+//  */
+// String AmplifierClass::FLAGS_GetStateStringC() {
+// 	return "INCOMPLETE";
+// }
+
+// /**
+//  * @brief Check if amplifiers are active
+//  * @return true Amplfiers running
+//  * @return false Amplifiers disabled
+//  */
+// bool AmplifierClass::FLAGS_GetAmplifierState() {
+
+// 	return ( Flags.isEnabled );
+// }
+
+
+
+// /*  ======================================
+//  *  ======================================
+//  *
+//  *   RRRRR     EEEEEE    AAAAAAA    DDDDD
+//  *   RR  RR    EE        AA   AA    DD  DD
+//  *   RR  RR    EE        AA   AA    DD  DD
+//  *   RRRRR     EEEE      AAAAAAA    DD  DD
+//  *   RR  RR    EE        AA   AA    DD  DD
+//  *   RR  RR    EE        AA   AA    DD  DD
+//  *   RR   RR   EEEEEE    AA   AA    DDDDD
+//  *
+//  *  ======================================
+//  *  ======================================*/
+
+// /**
+//  * @brief Read encoders using HWserial
+//  */
+// void AmplifierClass::HWSERIAL_GetEncoderValues() {
+
+// 	// Send serial command to read encoder
+// 	HWSERIAL_EnqueueQueryA( HWSerial.Ascii.getEncoderCount );
+// 	HWSERIAL_EnqueueQueryB( HWSerial.Ascii.getEncoderCount );
+// 	HWSERIAL_EnqueueQueryC( HWSerial.Ascii.getEncoderCount );
+// }
+
+// /**
+//  * @brief Read amplifier baud rate
+//  */
+// void AmplifierClass::HWSERIAL_GetAmplifierBaudRates() {
+
+// 	Serial.println( "Entering HWSERIAL_GetAmplifierBaudRates" );
+
+
+// 	// A
+// 	HWSERIAL_EnqueueQueryA(HWSerial.Ascii.getBaud);
+// 	delay(50);
+// 	HWSERIAL_PushQueryA();
+// 	HWSERIAL_WaitForPortA(500);           // no Serial spam, has timeout
+// 	// no HWSerialA.clear() here
+
+// 	// B
+// 	HWSERIAL_EnqueueQueryB(HWSerial.Ascii.getBaud);
+// 	delay(50);
+// 	HWSERIAL_PushQueryB();
+// 	HWSERIAL_WaitForPortB(500);
+// 	// no HWSerialB.clear()
+
+// 	// C
+// 	HWSERIAL_EnqueueQueryC(HWSerial.Ascii.getBaud);
+// 	delay(50);
+// 	HWSERIAL_PushQueryC();
+// 	HWSERIAL_WaitForPortC(500);
+// 	// no HWSerialC.clear()
+
+// 	Serial.print(F("Baud rates: A = "));
+// 	Serial.print(HWSerial.Connection.baudRateA);
+// 	Serial.print(F(", B = "));
+// 	Serial.print(HWSerial.Connection.baudRateB);
+// 	Serial.print(F(", C = "));
+// 	Serial.println(HWSerial.Connection.baudRateC);
+
+// 	Serial.println("HWSERIAL_GetAmplifierBaudRates complete");
+
+
+// 	// // Enqueue command
+// 	// HWSERIAL_EnqueueQueryA( HWSerial.Ascii.getBaud );
+// 	// delay( 100 );
+
+// 	// // Push queries out
+// 	// HWSERIAL_PushQueryA();
+// 	// delay( 300 );
+
+// 	// HWSerialA.flush();
+
+// 	// // Wait for responses before proceeding
+// 	// while ( HWSerial.isAwaitingResponseA ) {
+// 	// 	Serial.println( "WhileA " );
+// 	// 	if ( HWSerialA.available() ) {
+// 	// 		Serial.println( "AvailA" );
+// 	// 		HWSERIAL_ReadQueryResponseA();
+// 	// 	} else if ( !HWSerialA.available() ) {
+// 	// 		Serial.println( "!AvailA" );
+// 	// 	}
+// 	// }
+// 	// delay(300) ;
+
+
+
+// 	// HWSERIAL_EnqueueQueryB( HWSerial.Ascii.getBaud );
+// 	// delay( 100 );
+
+// 	// HWSERIAL_PushQueryB();
+// 	// delay( 300 );
+
+// 	// HWSerialB.flush();
+// 	// while ( HWSerial.isAwaitingResponseB ) {
+// 	// 	Serial.println( "WhileB " );
+// 	// 	if ( HWSerialB.available() ) {
+// 	// 		Serial.println( "AvailB" );
+// 	// 		HWSERIAL_ReadQueryResponseB();
+// 	// 	} else if ( !HWSerialB.available() ) {
+// 	// 		Serial.println( "!AvailB" );
+// 	// 	}
+// 	// }
+// 	// delay(300) ;
+
+
+
+// 	// HWSERIAL_EnqueueQueryC( HWSerial.Ascii.getBaud );
+// 	// delay( 100 );
+// 	// HWSERIAL_PushQueryC();
+// 	// delay( 300 );
+// 	// HWSerialC.flush();
+
+// 	// while ( HWSerial.isAwaitingResponseC ) {
+// 	// 	Serial.println( "WhileC " );
+// 	// 	if ( HWSerialC.available() ) {
+// 	// 		Serial.println( "AvailC" );
+// 	// 		HWSERIAL_ReadQueryResponseC();
+// 	// 	} else if ( !HWSerialC.available() ) {
+// 	// 		Serial.println( "!AvailC" );
+// 	// 	}
+// 	// }
+// 	// delay(300) ;
+// 	// // HWSerialC.clear();
+
+
+// 	// // Wait for responses
+// 	// // HWSERIAL_PushAllAndWaitForResponses();
+
+// 	// // Print baud rates
+// 	// Serial.print( F( "Baud rates: A = " ) );
+// 	// Serial.print( HWSerial.Connection.baudRateA );
+// 	// Serial.print( F( ", B = " ) );
+// 	// Serial.print( HWSerial.Connection.baudRateB );
+// 	// Serial.print( F( ", C = " ) );
+// 	// Serial.print( HWSerial.Connection.baudRateC );
+// 	// Serial.println();
+
+// 	Serial.println( "HWSERIAL_GetAmplifierBaudRates complete" );
+// }
+
+
+// /**
+//  * @brief Gets the encoder count from motor A
+//  * @return int32_t encoder count in ticks
+//  */
+// int32_t AmplifierClass::READ_GetCountA() {
+
+// 	return Read.countA;
+// }
+
+// /**
+//  * @brief Gets the encoder count from motor B
+//  * @return int32_t encoder count in ticks
+//  */
+// int32_t AmplifierClass::READ_GetCountB() {
+
+// 	return Read.countB;
+// }
+
+// /**
+//  * @brief Gets the encoder count from motor C
+//  * @return int32_t encoder count in ticks
+//  */
+// int32_t AmplifierClass::READ_GetCountC() {
+
+// 	return Read.countC;
+// }
+
+
+
+// /**
+//  * @brief Gets the encoder count from motor A
+//  * @return float encoder count in degrees
+//  */
+// float AmplifierClass::READ_GetAngleDegA() {
+
+// 	return Read.angleDegA;
+// }
+
+// /**
+//  * @brief Gets the encoder count from motor B
+//  * @return float encoder count in degrees
+//  */
+// float AmplifierClass::READ_GetAngleDegB() {
+
+// 	return Read.angleDegB;
+// }
+
+// /**
+//  * @brief Gets the encoder count from motor C
+//  * @return float encoder count in degrees
+//  */
+// float AmplifierClass::READ_GetAngleDegC() {
+
+// 	return Read.angleDegC;
+// }

@@ -29,6 +29,11 @@
 #define PIN_AMPLIFIER_LED_C 32		 // Serial interface LED
 #define PIN_AMPLIFIER_SAFETY 9		 // Safety switch input (can be overriden on control board as well)
 
+// Constants
+const int16_t CONST_PWM_ZERO = 2047;	// Zero output value
+const int16_t CONST_PWM_MAX	 = 1;		// Maximum PWM value
+
+
 
 /* 
  * 
@@ -65,7 +70,6 @@ struct AsciiStruct {
 	String setIdle			 = "";					  // HWSerial command for idle
 	String setBaud115237	 = "s r0x90 115237\r";	  // HWSerial command to set baud rate to 115237
 	String setCurrentMode	 = "s r0x24 3\r";		  // HWSerial command to set amplifier in PWM current mode
-	String setEncoderZero	 = "s r0x17 0\r";		  // HWSerial command to reset motor encoder
 };
 
 
@@ -129,13 +133,58 @@ struct FlagsStruct {
 
 
 /**
+ * @brief Struct for mapping motor angles
+ */
+struct MappingStruct {
+
+	float		targetRadius   = 0.0f;				   // Radius for polar conversion
+	float		targetAngleDeg = 0.0f;				   // Angle of actuation
+	float		contributionA  = 0.0f;				   // Contribution for motor A
+	float		contributionB  = 0.0f;				   // Contribution for motor B
+	float		contributionC  = 0.0f;				   // Contribution for motor C
+	const float thetaA		   = radians( 35.0f );	   // Motor A angle
+	const float thetaB		   = radians( 145.0f );	   // Motor B angle
+	const float thetaC		   = radians( 270.0f );	   // Motor C angle
+	const float angleAB		   = radians( 110.0f );	   // Sweep angle between angles A and B
+	const float angleBC		   = radians( 125.0f );	   // Sweep angle between angles A and B
+	const float angleAC		   = radians( 125.0f );	   // Sweep angle between angles A and B
+};
+
+/**
+ * @brief Struct of hardware limits
+ */
+struct LimitsStruct {
+
+	// Flags
+	bool isAmplifierPowerLimitSet	  = false;	  // Has the pwm limit been recorded?
+	bool isAmplifierPowerLimitApplied = false;	  // Is the PWM limit being applied
+	bool isEncoderLimitSet			  = false;	  // Has the encoder limit been recorded?
+	bool isEncoderLimitApplied		  = false;	  // Is the encoder limit being applied
+
+	// Motor power output limits
+	int16_t pwmLimitA	  = CONST_PWM_ZERO;	   // PWM limit for amp A
+	int16_t pwmLimitB	  = CONST_PWM_ZERO;	   // PWM limit for amp B
+	int16_t pwmLimitC	  = CONST_PWM_ZERO;	   // PWM limit for amp C
+	float	currentLimitA = 0.0f;			   // Current limit for ampA
+	float	currentLimitB = 0.0f;			   // Current limit for ampB
+	float	currentLimitC = 0.0f;			   // Current limit for ampC
+
+	// Encoder reading limits
+	int32_t encoderLimitA = 0;		 // Encoder reading limit
+	int32_t encoderLimitB = 0;		 // Encoder reading limit
+	int32_t encoderLimitC = 0;		 // Encoder reading limit
+	float	phiLimitDegA  = 0.0f;	 // Encoder angle limit
+	float	phiLimitDegB  = 0.0f;	 // Encoder angle limit
+	float	phiLimitDegC  = 0.0f;	 // Encoder angle limit
+};
+
+
+/**
  * @brief Struct of PWM elements and values
  */
 struct PWMStruct {
 
 	// PWM elements
-	int16_t CONST_PWM_ZERO = 2047;				// Zero output value
-	int16_t CONST_PWM_MAX  = 1;					// Maximum PWM value
 	int16_t totalOutgoingA = CONST_PWM_ZERO;	// Total commanded PWM value for amp A
 	int16_t totalOutgoingB = CONST_PWM_ZERO;	// Total commanded PWM value for amp B
 	int16_t totalOutgoingC = CONST_PWM_ZERO;	// Total commanded PWM value for amp C
@@ -148,6 +197,7 @@ struct PWMStruct {
 	int16_t outgoingOldA   = CONST_PWM_ZERO;	// Previous commanded PWM value for amp A
 	int16_t outgoingOldB   = CONST_PWM_ZERO;	// Previous commanded PWM value for amp B
 	int16_t outgoingOldC   = CONST_PWM_ZERO;	// Previous commanded PWM value for amp C
+	int8_t	tensionInteger = 0;
 };
 
 
@@ -157,8 +207,10 @@ struct PWMStruct {
 struct CommandStruct {
 
 	// Sub-structs
-	FlagsStruct Flags;	  // Container for flags
-	PWMStruct	Pwm;	  // Container of pwm elements
+	FlagsStruct	  Flags;	  // Container for flags
+	LimitsStruct  Limits;	  // Container for limits
+	MappingStruct Mapping;	  // Container for mapping elements
+	PWMStruct	  Pwm;		  // Container of pwm elements
 };
 
 
@@ -171,15 +223,24 @@ struct CommandStruct {
 struct SensorsStruct {
 
 	// Telemetry values
-	int16_t measuredCurrentA	  = 0;	  // Measured current
-	int16_t measuredCurrentB	  = 0;	  // Measured current
-	int16_t measuredCurrentC	  = 0;	  // Measured current
-	int32_t measuredEncoderCountA = 0;	  // Encoder count
-	int32_t measuredEncoderCountB = 0;	  // Encoder count
-	int32_t measuredEncoderCountC = 0;	  // Encoder count
-	float angleDegA			  = 0.0f;	  // Angle in degrees
-	float angleDegB			  = 0.0f;	  // Angle in degrees
-	float angleDegC			  = 0.0f;	  // Angle in degrees
+	float	measuredCurrentA		 = 0;		// Measured current
+	float	measuredCurrentB		 = 0;		// Measured current
+	float	measuredCurrentC		 = 0;		// Measured current
+	int32_t measuredEncoderCountA	 = 0;		// Raw encoder count from motor
+	int32_t measuredEncoderCountB	 = 0;		// Raw encoder count from motor
+	int32_t measuredEncoderCountC	 = 0;		// Raw encoder count from motor
+	int32_t encoderOffsetA			 = 0;		// Encoder count compensated for encoder resets
+	int32_t encoderOffsetB			 = 0;		// Encoder count compensated for encoder resets
+	int32_t encoderOffsetC			 = 0;		// Encoder count compensated for encoder resets
+	int32_t compensatedEncoderCountA = 0;		// Encoder count with offset
+	int32_t compensatedEncoderCountB = 0;		// Encoder count with offset
+	int32_t compensatedEncoderCountC = 0;		// Encoder count with offset
+	int32_t motorAngleLimitA		 = 0.0f;	// Limit of angle A
+	int32_t motorAngleLimitB		 = 0.0f;	// Limit of angle A
+	int32_t motorAngleLimitC		 = 0.0f;	// Limit of angle A
+	float	motorAngleDegA			 = 0.0f;	// Raw angle in degrees
+	float	motorAngleDegB			 = 0.0f;	// Angle in degrees
+	float	motorAngleDegC			 = 0.0f;	// Angle in degrees
 };
 
 
@@ -218,18 +279,22 @@ class AmplifierClass {
 	**************/
 	public:
 	CommandStruct Command;
-	void		  Begin();							 // Initialize class
-	void		  Update();							 // Update (called every loop)
+	void		  Begin();													 // Initialize class
+	void		  Update();													 // Update (called every loop)
 	void		  SetTension( uint8_t tenA, uint8_t tenB, uint8_t tenC );	 // Set tension value
-	bool		  GetSafetySwitchState();			 // Returns the state of the safety switch state
+	bool		  GetSafetySwitchState();									 // Returns the state of the safety switch state
+	void		  ReadSensors();											 // Reads the current and encoders on the amplifier
+	void		  ZeroMotorEncoders();										 // Zero motor encoders
+	void		  DriveMotorOutputs();										 // Drives the motor output
+
 	private:
-	void CommandPWM();	 // Send PWM signals to amplifiers
-	void CommandZero();	 // Send zero signal to amplifiers
-	void Reset();		 // Reset amplifier
-	void Enable();		 // Enable amplifier
-	void Disable();		 // Disables amplifier (for emergencies, requires system restart)
-	void DisableA();	 // Disable amplfier and clear memory
-	void EnableA();		 // Enable amplifier
+	void CommandPWM();	   // Send PWM signals to amplifiers
+	void CommandZero();	   // Send zero signal to amplifiers
+	void Reset();		   // Reset amplifier
+	void Enable();		   // Enable amplifier
+	void Disable();		   // Disables amplifier (for emergencies, requires system restart)
+	void DisableA();	   // Disable amplfier and clear memory
+	void EnableA();		   // Enable amplifier
 
 
 	/************
@@ -241,18 +306,20 @@ class AmplifierClass {
 	void		   InitializeAmplifierB();	  // Initialize HWSerialB
 	void		   InitializeAmplifierC();	  // Initialize HWSerialC
 
-	void SendQueryA( String newQuery );	   // Send a query to HWSerialA
-	void SendQueryB( String newQuery );	   // Send a query to HWSerialB
-	void SendQueryC( String newQuery );	   // Send a query to HWSerialC
-	void ParseQueryA();					   // Parse queryA
-	void ParseQueryB();					   // Parse queryB
-	void ParseQueryC();					   // Parse queryC
+	void SendQueryA( String newQuery );		// Send a query to HWSerialA
+	void SendQueryB( String newQuery );		// Send a query to HWSerialB
+	void SendQueryC( String newQuery );		// Send a query to HWSerialC
+	void ParseQueryA();						// Parse queryA
+	void ParseQueryB();						// Parse queryB
+	void ParseQueryC();						// Parse queryC
+	bool isVerboseOutputEnabled = false;	// Flag for debug output
 
 	public:
-	// void SendEncoderZeroCommand();	  // Send command to reset encoders
-	void OnHWSerialAEvent();	// Instance handler for HWSerialA
-	void OnHWSerialBEvent();	// Instance handler for HWSerialB
-	void OnHWSerialCEvent();	// Instance handler for HWSerialC
+	void OnHWSerialAEvent();				 // Instance handler for HWSerialA
+	void OnHWSerialBEvent();				 // Instance handler for HWSerialB
+	void OnHWSerialCEvent();				 // Instance handler for HWSerialC
+	void EnableDebugOutput( bool state );	 // Toggle HWSerial debug output
+
 
 
 	/*******************
@@ -268,6 +335,35 @@ class AmplifierClass {
 	public:
 	SensorsStruct Sensors;
 
+	private:
+	void   ReadCurrents();	   // Send serial commands to read motor currents
+	void   ReadEncoders();	   // Send serial commands to read motor encoders
+	int8_t activeQuery = 0;	   // Which sensor to read next
+
+
+
+	/***************
+	*  ROM LIMITS  *
+	****************/
+	public:
+	void StartMeasuringRangeOfMotionLimits();	 // Measures the range of motion
+	void StopMeasuringRangeOfMotionLimits();	 // Measures the range of motion
+
+	private:
+	bool isEncoderLimitBeingMeasured = false;	 // Flag for encoder limit measurement
+
+
+	/*******************
+	*  CURRENT LIMITS  *
+	********************/
+	public:
+	void StartMeasuringCurrentLimits( char ampLetter );	   // Start measuring current limits
+	void StopMeasuringCurrentLimits();					   // Stop measuring current limits
+
+	private:
+	bool	 isCurrentLimitBeingMeasured = false;	 // Flag for current limit measurement
+	char	 amplifierBeingMeasured		 = 'X';		 // Which amp is being measured
+	uint16_t currentPwmRampValue		 = 0;		 // Value to add to driven PWM
 
 	/*************
 	*  Accessors *
@@ -276,6 +372,7 @@ class AmplifierClass {
 	// Nothing
 
 	public:
+	// Amplifier Serial properties
 	String	GetAmplifierNameA();	// Returns name of amplifier
 	String	GetAmplifierNameB();	// Returns name of amplifier
 	String	GetAmplifierNameC();	// Returns name of amplifier
@@ -283,17 +380,56 @@ class AmplifierClass {
 	int32_t GetBaudB();				// Returns baud rate
 	int32_t GetBaudC();				// Returns baud rate
 
+	public:
+	// Amplfier output properties
+	uint16_t GetAmplfierPwmA();							  // Returns the PWM value of an amplifier
+	uint16_t GetAmplfierPwmB();							  // Returns the PWM value of an amplifier
+	uint16_t GetAmplfierPwmC();							  // Returns the PWM value of an amplifier
+	int8_t	 GetTensionValue();							  // Returns current tension value
+	bool	 GetAmplifierOutputState();					  // Returns amplifier output state
+	void	 SetAmplifierOutputState( bool newState );	  // State of amplifier
+
+	public:
+	// Amplifier power limits
+	bool	GetIsAmplifierPowerLimitApplied();					 // Returns flag if limits are enabled
+	bool	GetIsAmplifierPowerLimitSet();						 // Returns flag if limits have been set
+	int16_t GetAmplifierPwmPowerLimitA();						 // Returns the PWM limit for A
+	int16_t GetAmplifierPwmPowerLimitB();						 // Returns the PWM limit for B
+	int16_t GetAmplifierPwmPowerLimitC();						 // Returns the PWM limit for C
+	float	GetAmplifierCurrentLimitA();						 // Returns the current limit for A
+	float	GetAmplifierCurrentLimitB();						 // Returns the current limit for A
+	float	GetAmplifierCurrentLimitC();						 // Returns the current limit for A
+	void	SetIsAmplifierPowerLimitSet( bool newState );		 // Toggles if the limits have been set or not
+	void	SetIsAmplifierPowerLimitApplied( bool newState );	 // Toggles the amplifier's limits on and off
+
+	public:
+	// Amplifier encoder limits
+	bool  GetIsAmplifierEncoderLimitApplied();					 // Returns flag if encoder limits are enabled
+	bool  GetIsAmplifierEncoderLimitSet();						 // Returns flag if encoder limits have been set
+	float GetAmplifierEncoderLimitA();							 // Returns the PWM limit for A
+	float GetAmplifierEncoderLimitB();							 // Returns the PWM limit for A
+	float GetAmplifierEncoderLimitC();							 // Returns the PWM limit for A
+	void  SetIsAmplifierEncoderLimitSet( bool newState );		 // Toggles if the limits have been set or not
+	void  SetIsAmplifierEncoderLimitApplied( bool newState );	 // Toggles the amplifier's limits on and off
 
 
+	public:
+	// Get amplifier sensor properties
 	int32_t GetEncoderCountA();		 // Measured encoder count
 	int32_t GetEncoderCountB();		 // Measured encoder count
 	int32_t GetEncoderCountC();		 // Measured encoder count
-	int16_t GetCurrentReadingA();	 // Measured current reading
-	int16_t GetCurrentReadingB();	 // Measured current reading
-	int16_t GetCurrentReadingC();	 // Measured current reading
-	float GetAngleDegA();			 // Measured motor angle
-	float GetAngleDegB();			 // Measured motor angle
-	float GetAngleDegC();			 // Measured motor angle
+	float	GetCurrentReadingA();	 // Measured current reading
+	float	GetCurrentReadingB();	 // Measured current reading
+	float	GetCurrentReadingC();	 // Measured current reading
+	float	GetAngleDegA();			 // Measured motor angle
+	float	GetAngleDegB();			 // Measured motor angle
+	float	GetAngleDegC();			 // Measured motor angle
+
+	public:
+	// Conversions
+	float	 GetCurrentFromPWM( uint16_t pwmValue );					 // Converts a PWM value into current
+	float	 GetCurrentFromIntegerPercentage( uint8_t percentValue );	 // Convert a percentage to current
+	uint16_t GetPwmFromCurrent( float currentValue );					 // Converts current into PWM
 };
 
 
