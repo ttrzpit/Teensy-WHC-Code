@@ -1,5 +1,31 @@
 {
     "files.associations": {
-        "string_view": "cpp"
+        "string_view": "cpp",
+        "array": "cpp",
+        "initializer_list": "cpp",
+        "utility": "cpp",
+        "deque": "cpp",
+        "string": "cpp",
+        "unordered_map": "cpp",
+        "vector": "cpp",
+        "*.bak": "cpp"
+    },
+    "editor.multiCursorModifier": "ctrlCmd",
+    "editor.multiCursorLimit": 1,
+    "files.exclude": {
+        "**/OLD*": true,
+        "**/*BAK": true
+    },
+    "C_Cpp.files.exclude": {
+        "**/OLD*": true,
+        "**/*BAK": true
+    },
+    "files.watcherExclude": {
+        "**/OLD*": true,
+        "**/*BAK": true
+    },
+    "search.exclude": {
+        "**/OLD*": true,
+        "**/*BAK": true
     }
 }

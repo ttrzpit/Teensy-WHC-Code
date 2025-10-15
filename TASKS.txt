@@ -1,73 +1,15 @@
-Libraries / Functions
-** TO DO **
--   Amplifier
-    -   *Instantiate new class
-        - *Configure pins                -> ConfigurePins()   
-            -   Set pin modes
-            -   Disable amps            -> Disable()
-            -   Set analog resolution
-            -   Set PWM to Zero         -> SetZeroOutput()
-        -   *Initialize HW serial
-            -   HWSerial.begin...
-        -   *Reset into PWM mode         -> ResetIntoPwmMode() 
-            -   Turn on serial LEDs
-        -   *Enable Amplifier
-        -   *Delay
+Discrimination Task setup
 
-    -   *Initialize amplifier serial
-    -   Get encoder values
-    -   Reset encoder values
-    -   Set tension values
-    -   Measure limits
-    -   DriveXY
-    -   DriveABC
+    Both
+        n           Number of sets / repetitions
+        tDelay      Delay in milliseconds before a prompt, randomly chosen from { 3000, 3500, 4000, 4500, 5000 }
 
-** COMPLETE ** 
--   Encoder
-    -   Read X
-    -   Read Y
-    -   Zero encoders
--   Serial monitor input 
-    -   Read command
-    -   Parse command
--   Testing gamepad
-    -   Read commands
-    -   Parse commands
+    Cardinal
+        randomPool  Pool of prompt directions, randomly chosen from { UP, RIGHT, DOWN, LEFT } 
 
+    Octant
+        randomPool  Pool of prompt directions, randomly chosen from { UP, RIGHT, DOWN, LEFT, UP+RIGHT, DOWN+RIGHT, DOWN+LEFT, UP+LEFT } 
 
-Sequence
--   Set pins
--   Initialize amps
--   Initialize amp Serial
-
-
-
-
-- Inputs
-    - Read buttons
-    
-
-- Accessible motor drive function
-
-
-
-
-/** Amplifier startup sequence
-  * - New Amplifier Class
-  *   - Configure pins
-  *     - 
-  *   - Initialize HW Serial 
-  
-  *   -	Disable amps
-  *   - Change resolution
-  *   - Zero output
-  *   - Begin HW serial (9600) 
-  *   - Reset into PWM mode
-  *   - Enable amplifiers
-  *   - Delay
-  * - Update 
-  *   - Pick state
-  *     - DrivePWM
-  *       - Constrain values
-  *       - Send command
-*/
+    Questions:
+        Prompt timing: 
+            Should the prompt be sustained until a response is given, or should the prompt only last for X seconds?

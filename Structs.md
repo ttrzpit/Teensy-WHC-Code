@@ -1,3 +1,53 @@
+ManagedData (System)
+    Drive
+        Flags
+        Mapping
+        PWM
+        Tension
+    Interface
+        GamepadInput
+        HWSerial
+            Connection
+            Packets
+        KeyboardInput
+        Mapping
+        SWSerial
+    Sensors
+        PlatformEncoders
+        MotorCurrent
+            CurrentLimits
+        MotorEncoders
+            EncoderLimits
+    Tasks
+        DiscriminationTask
+            CardinalDirections
+            AllDirections
+    System
+        ActionQueue
+        Drive
+        Interface
+        Sensors
+
+
+Amplifier
+    HWSerial
+        ASCII
+        Packets
+        Properties
+    Command
+        Flags
+        Mapping
+        Limits
+        PWM
+            TensionPWM
+    Sensors
+
+
+    
+    
+    
+
+
 /**
  * STRUCTS IN SOFTWARE
  * 
@@ -15,3 +65,13 @@
  * Sensors
  * 
  */
+
+
+/**
+ *
+ * Discrimination Task
+ *   CardinalPoolStruct
+ *   CardinalResponsesStruct
+ *   trialNumber
+ *   delayTime 
+ *   trialTime

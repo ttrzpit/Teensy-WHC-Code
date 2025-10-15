@@ -1,4 +1,5 @@
 #include "Gamepad.h"
+#include "SharedMemory.h"
 
 /**
  * @brief Construct a new Gamepad Class:: Gamepad Class object
@@ -20,7 +21,19 @@ void GamepadClass::Begin() {
 	InitializeThresholdArrays();
 
 	delay( 250 );
-	Serial.println( F( "Platform gamepad initialization...            Success!" ) );
+	Serial.println( F( "PLATFORM:      Input pad interface...                  Ready." ) );
+}
+
+
+/**
+ * @brief Called every program loop 
+ * 
+ */
+void GamepadClass::Loop() {
+
+	// Poll buttons and process analog data
+	PollButtons();
+	
 }
 
 
@@ -156,6 +169,9 @@ void GamepadClass::InitializeThresholdArrays() {
  */
 void GamepadClass::MapButtonValues() {
 
+	// Shared Memory Alias
+	static auto Shared = SYSTEM_GLOBAL.GetData();
+
 	// Reset state values and strings
 	cardinalStateValue	= -1;
 	diagonalStateValue	= -1;
@@ -165,7 +181,6 @@ void GamepadClass::MapButtonValues() {
 	diagonalStateString = "";
 	buttonStateString	= "";
 	combinedStateString = "";
-
 
 
 	// Iterate over cardinal directions
@@ -210,7 +225,7 @@ void GamepadClass::MapButtonValues() {
 		combinedStateString = buttonStateString;
 	} else {
 		combinedStateValue	= -1;
-		combinedStateString = "";
+		combinedStateString = "None";
 	}
 
 	// Debounce check
@@ -229,13 +244,15 @@ void GamepadClass::MapButtonValues() {
 
 				// Edge detection
 				if ( lastStableState != -1 ) {
-					
+
 					combinedStateValue = lastStableState;
 					isNewStateReady	   = true;
-					// Serial.print( "IN CLASS Button: " );
-					// Serial.print( combinedStateValue );
-					// Serial.print( " , " );
-					// Serial.println( combinedStateString );
+
+					// Update shared memory
+					Shared->Interface.Gamepad.isInputWaiting = true;
+					Shared->Interface.Gamepad.buttonPressed	 = combinedStateValue;
+					Shared->Interface.Gamepad.buttonName	 = combinedStateString;
+
 				} else {
 				}
 			}

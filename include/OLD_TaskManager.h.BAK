@@ -1,0 +1,95 @@
+#pragma once
+
+#include <Arduino.h>
+
+// === Pre-built libraries ========================================================================
+#include <algorithm>
+#include <random>
+#include <unordered_map>
+#include <vector>
+
+
+// Task enums
+enum class TrialState : uint8_t { IDLE, STARTING, WAITING_DELAY, RENDERING_PROMPT, FINISHING };
+
+struct DiscriminationTaskResultStruct {
+
+	size_t	 trialNumber	   = 0;		   // Iterating trial number
+	uint32_t promptDelayTimeMs = 0;		   // Randomized delay time
+	int8_t	 promptVal		   = -1;	   // Value of new directional prompt
+	String	 promptString	   = "";	   // String of new directional  prompt
+	int8_t	 responseVal	   = -1;	   // Value of participant response to prompt
+	String	 responseString	   = "";	   // String of participant response to prompt
+	uint32_t responseTimeMs	   = 0.0f;	   // Participant task completion time [ms]
+	bool	 isResponseCorrect = false;	   // Flag if response correct
+};
+
+struct TaskStruct {
+
+	// Variables
+	TrialState									state			   = TrialState::IDLE;	  // Default state
+	size_t										currentTrialNumber = 0;					  // Current trial number
+	bool										isTrialRunning	   = false;				  // Flag
+	std::vector<int8_t>							randomPool;								  // Pool of random cardinal elements
+	std::vector<DiscriminationTaskResultStruct> userResponses;							  // Pool of user responses
+
+	// Runtime scheduling
+	uint32_t trialStartMs  = 0;
+	uint32_t promptAtMs	   = 0;
+	uint32_t promptShownMs = 0;
+
+	int8_t gamepadResponse = -1;
+};
+
+
+struct DiscriminationTaskStruct {
+
+	// Task structs
+	TaskStruct CardinalDirectionsTask;	  // Cardinal directions
+	TaskStruct CombinedDirectionsTask;	  // All 8 directions
+
+	// Unordered map to link value to string
+	std::unordered_map<int8_t, std::string> directionsMap = { { -1, "NONE      " }, { 0, "UP        " }, { 1, "UP+RIGHT  " }, { 2, "RIGHT     " }, { 3, "DOWN+RIGHT" }, { 4, "DOWN      " }, { 5, "DOWN+LEFT " }, { 6, "LEFT      " }, { 7, "UP+LEFT   " } };
+
+	// Timing
+	elapsedMillis		  delayTime;	// Ongoing timer for delay time
+	elapsedMillis		  trialTime;	// Ongoing timer for trial time
+	uint32_t			  minTimeDelayMs = 3000;
+	std::vector<uint32_t> timeDelayPool	 = { minTimeDelayMs, minTimeDelayMs + 500, minTimeDelayMs + 100, minTimeDelayMs + 1500, minTimeDelayMs + 2000, minTimeDelayMs + 2500 };
+};
+
+
+
+class TaskManagerClass {
+
+	// === CONSTRUCTORS ===========================================================================
+
+	public:
+	TaskManagerClass();													// Default constructor
+	TaskManagerClass( const TaskManagerClass& )			   = delete;	// Safety to prevent multiple class instances
+	TaskManagerClass& operator=( const TaskManagerClass& ) = delete;
+	TaskManagerClass( TaskManagerClass&& )				   = delete;
+	TaskManagerClass& operator=( TaskManagerClass&& )	   = delete;
+
+
+	// === GENERAL FUNCTIONS ======================================================================
+
+	private:
+	// Initialize random pools
+	void InitializeRandomPool( uint8_t nElements, uint8_t nRepetitions );
+
+
+	// === DISCRIMINATION TASK ====================================================================
+	private:
+	DiscriminationTaskStruct DiscriminationTask;											// Discrimination task data container
+	void					 InitializeCardinalDirectionsVector( uint8_t nRepetitions );	// Initialize vector for cardinal directions
+	void					 InitializeAllDirectionsVector( uint8_t nRepetitions );			// Initialize vector for all directions
+	void					 PrintCardinalDirectionVector();								// Prints the cardinal dire
+	void					 PrintResponseStructCardinal();									// Prints the response struct for the cardinal task
+	void					 RenderPromptCardinal();										// Stop the discrimination task
+
+	public:
+	void StartDiscriminationTaskCardinal( uint8_t nRepetitions );	 // Start the discrimination task
+	void UpdateCardinalDiscriminationTask();						 // Update task
+	void EnterResponse( int8_t response );							 // Enter the user's response
+};

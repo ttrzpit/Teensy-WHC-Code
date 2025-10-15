@@ -15,6 +15,8 @@
 // Libraries for other classes passed by reference
 #include "Amplifier.h"
 #include "ArmEncoders.h"
+#include "Gamepad.h"
+#include "TaskManager.h"
 
 
 
@@ -36,11 +38,13 @@
 
 
 // Forward declarations
-class AmplifierClass;	  // Amplifier
-class ArmEncoderClass;	  // Arm encoders
+class AmplifierClass;	   // Amplifier
+class ArmEncoderClass;	   // Arm encoders
+class GamepadClass;		   // Gamepad input
+class TaskManagerClass;	   // Task manager
+
 
 // System state
-enum class systemStateEnum { IDLE, MEASURING_RANGE_OF_MOTION, MEASURING_CURRENT_LIMITS };	 // Enum of states
 
 
 class SoftwareSerialInterfaceClass {
@@ -49,13 +53,15 @@ class SoftwareSerialInterfaceClass {
 	*  Serial Constructors  *
 	*************************/
 	public:
-	SoftwareSerialInterfaceClass( systemStateEnum& systemStateRef, AmplifierClass& ampRef, ArmEncoderClass& armEncRef );	// Default constructor
-	static SoftwareSerialInterfaceClass* instance;																			// Singleton-style hook for global ISR shim
+	SoftwareSerialInterfaceClass(   );	// Default constructor
+	static SoftwareSerialInterfaceClass* instance;																																		// Singleton-style hook for global ISR shim
 
 	private:
-	systemStateEnum& SystemStateReference;
-	AmplifierClass&	 AmplifierReference;	 // Reference to amplifier
-	ArmEncoderClass& ArmEncoderReference;	 // Reference to arm encoder
+	// systemStateEnum&  SystemStateReference;
+	AmplifierClass&	  AmplifierReference;	   // Reference to amplifier
+	ArmEncoderClass&  ArmEncoderReference;	   // Reference to arm encoder
+	GamepadClass&	  GamepadReference;		   // Reference to game pad
+	TaskManagerClass& TaskManagerReference;	   // Reference to task manager
 
 
 
@@ -76,15 +82,18 @@ class SoftwareSerialInterfaceClass {
 	*  Keyboard Serial Input  *
 	***************************/
 	private:
-	void RespondToKeyboardCommands();								// Main function to parse commands into responses
-	void Respond_SetTension();										// Set tension
-	void Respond_PrintSystemStateBlock();							// Print system state
-	void Respond_ToggleScrollingState();							// Toggle system state scroll
-	void Respond_ZeroPlatformEncoders();							// Zero platform encoders
-	void Respond_ZeroMotorEncoders();								// Zero motor encoders
-	void Respond_ToggleAmplifierOutput();							// Toggle system output
-	void Respond_ToggleCurrentLimits();								// Toggle current limiter
-	void Respond_MeasureAmplifierRangeOfMotionLimits(  );	// Toggle ROM measurement
+	void RespondToKeyboardCommands();					   // Main function to parse commands into responses
+	void Respond_SetTensionValue();						   // Set tension
+	void Respond_ToggleTensionState();					   // Set tension
+	void Respond_PrintSystemStateBlock();				   // Print system state
+	void Respond_ToggleScrollingState();				   // Toggle system state scroll
+	void Respond_ZeroPlatformEncoders();				   // Zero platform encoders
+	void Respond_ZeroMotorEncoders();					   // Zero motor encoders
+	void Respond_ToggleAmplifierOutput();				   // Toggle system output
+	void Respond_ToggleCurrentLimits();					   // Toggle current limiter
+	void Respond_MeasureAmplifierRangeOfMotionLimits();	   // Toggle ROM measurement
+	void Respond_TestRangeOfMotionLimits();				   // Toggle ROM measurement
+	void Respond_DiscriminationTaskCardinal();			   // Start discrimination test
 
 	String incomingSerialString = "";	 // Serial string being received
 
@@ -101,15 +110,22 @@ class SoftwareSerialInterfaceClass {
 	bool isScrollingOutputEnabled = false;	  // Flag for scrolling output
 
 
+	/************
+	*  Gamepad  *
+	*************/
+	private:
+	void ParseGamepadInput();	 // Process gamepad inputs
+
+	public:
+	bool   isGamepadButtonPressed = false;	   // Flag if button press is waiting
+	int8_t gamepadButton		  = -1;		   // Gamepad button
+	String gamepadString		  = "None";	   // Gamepad button name
+
 
 	/****************
 	*  SystemState  *
 	*****************/
-	private:
-	systemStateEnum SYSTEM_STATE = systemStateEnum::IDLE;	 // Enumeration of states
-	String			currentState = "IDLE";					 // String of current system state
-	// systemStateEnum& SystemStateReference;					  // System state reference
-
+	
 
 
 	/*********************
@@ -120,4 +136,12 @@ class SoftwareSerialInterfaceClass {
 	void ShowElement_MotorEncoderCounts();	  // Show motor encoder values
 	void ShowElement_MotorEncoderAngles();	  // Show motor encoder values
 	void ShowElement_BaudRate();			  // Show encoder baud rat
+
+
+	/***************
+	 *  Accessors  *
+	 ***************/
+	public:
+	// Gamepad
+	void UpdateButtonState( bool newState, int8_t newButton, String newName );	  // Updates the button press
 };

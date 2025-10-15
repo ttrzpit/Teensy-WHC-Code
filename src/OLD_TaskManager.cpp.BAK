@@ -1,0 +1,275 @@
+#include "TaskManager.h"
+
+
+// === CONSTRUCTORS ===========================================================================
+
+TaskManagerClass::TaskManagerClass() { }
+
+
+
+// /*  ============================================================================================
+//  *  ============================================================================================
+//  *
+//  *   DDDDD   IIIIII  SSSSS   CCCCC  RRRR#R   IIIIII  MM    MM        TTTTTTT   AA   SSSSS  KK  KK
+//  *   DD  DD    II    SS     CC      RR  RR    II    MMM  MMM           TT    A  A  SS     KK KK
+//  *   DD  DD    II    SS     CC      RR  RR    II    MM MM MM           TT    AAAAA SS     KKKK
+//  *   DD  DD    II     SSSS  CC      RRRRR     II    MM    MM           TT    AA  AA  SSSS KKKK
+//  *   DD  DD    II        SS CC      RR  RR    II    MM    MM           TT    AA  AA     SS KK KK
+//  *   DD  DD    II        SS CC      RR  RR    II    MM    MM           TT    AA  AA     SS KK  KK
+//  *   DDDDD   IIIIII  SSSSS   CCCCC  RR  RR  IIIIII  MM    MM           TT    AA  AA SSSSS  KK  KK
+//  *
+//  *  ============================================================================================
+//  *  ============================================================================================*/
+
+
+/**
+ * @brief Start cardinal discrimination task 
+ * 
+ * @param nRepetitions 
+ */
+void TaskManagerClass::StartDiscriminationTaskCardinal( uint8_t nRepetitions ) {
+
+	// Initialize vector
+	InitializeCardinalDirectionsVector( nRepetitions );
+
+	// Create handle
+	auto& T = DiscriminationTask.CardinalDirectionsTask;
+
+	// Reset trial number
+	T.currentTrialNumber = 0;
+
+	// Update flag
+	T.isTrialRunning = true;
+
+	// Set initial state
+	T.state = TrialState::STARTING;
+
+	Serial.println( "Initialized." );
+}
+
+
+/**
+ * @brief Build the initial discrimination task result vector
+ */
+void TaskManagerClass::InitializeCardinalDirectionsVector( uint8_t nRepetitions ) {
+
+	// Clear pool
+	DiscriminationTask.CardinalDirectionsTask.randomPool.clear();
+
+	// Build vector of 4 directions
+	for ( int d = 0; d < 4; d++ ) {
+
+		// Iterate over number of repetitions
+		for ( int n = 0; n < nRepetitions; n++ ) {
+
+			// Add direction to vector
+			DiscriminationTask.CardinalDirectionsTask.randomPool.push_back( d * 2 );	// Multiply by two since cardinal directions are on 0, 2, 4, 6
+		}
+	}
+
+	// Generate strong random seed
+	uint32_t a	  = analogRead( A8 );										// Populate with floating pin if possible
+	uint32_t t	  = micros();												// timer jitter
+	uint32_t b	  = analogRead( A9 );										// Populate with floating pin if possible
+	uint32_t seed = ( t << 16 ) ^ ( a << 1 ) ^ ( b << 17 ) ^ ( t >> 3 );	// Combination
+	if ( seed == 0 ) seed = 0xA5A5F17E;										// Default to avoid zero
+	std::mt19937 generator( seed );											// Mersenne Twister RNG
+
+	// Shuffle direction vector
+	std::shuffle( DiscriminationTask.CardinalDirectionsTask.randomPool.begin(), DiscriminationTask.CardinalDirectionsTask.randomPool.end(), generator );
+
+	// Debug
+	// PrintCardinalDirectionVector();
+
+	// Clear response vector
+	DiscriminationTask.CardinalDirectionsTask.userResponses.clear();
+	DiscriminationTask.CardinalDirectionsTask.userResponses.resize( DiscriminationTask.CardinalDirectionsTask.randomPool.size() );
+
+	// Populate response vector with initial data
+	for ( std::size_t e = 0; e < DiscriminationTask.CardinalDirectionsTask.randomPool.size(); ++e ) {
+
+		auto& entry = DiscriminationTask.CardinalDirectionsTask.userResponses.at( e );
+		// Populate struct
+		entry.trialNumber		= e + 1;																									 // Trial number
+		entry.promptDelayTimeMs = DiscriminationTask.timeDelayPool.at( random( 0, 6 ) );													 // Delay time (in seconds)
+		entry.promptVal			= DiscriminationTask.CardinalDirectionsTask.randomPool.at( e );												 // Prompt value
+		entry.promptString		= DiscriminationTask.directionsMap[DiscriminationTask.CardinalDirectionsTask.randomPool.at( e )].c_str();	 // Prompt string
+		entry.responseVal		= -1;																										 // Default value
+		entry.responseString	= "None";																									 // Response string
+		entry.responseTimeMs	= 0;																										 // Response time
+		entry.isResponseCorrect = false;																									 // Default response
+	}
+
+	// Debug
+	PrintResponseStructCardinal();
+}
+
+
+
+void TaskManagerClass::PrintCardinalDirectionVector() {
+
+	// Print pool (for debug)
+	Serial.println( "Random cardinal direction pool: " );
+	for ( std::size_t e = 0; e < DiscriminationTask.CardinalDirectionsTask.randomPool.size(); e++ ) {
+
+		Serial.print( "[" );
+		Serial.print( e );
+		Serial.print( "] = " );
+		Serial.print( DiscriminationTask.CardinalDirectionsTask.randomPool.at( e ) );
+		Serial.print( " (" );
+		Serial.print( DiscriminationTask.directionsMap[DiscriminationTask.CardinalDirectionsTask.randomPool.at( e )].c_str() );
+		Serial.println( ")" );
+	}
+}
+
+void TaskManagerClass::PrintResponseStructCardinal() {
+
+	// Print heading
+	Serial.println( F( "=== Cardinal Direction Responses ===========" ) );
+	Serial.println( F( "Trial#\tDelay\tPrompt\t\tResponse\tTime\tResult" ) );
+
+	// Iterate over elements
+	for ( std::size_t e = 0; e < DiscriminationTask.CardinalDirectionsTask.userResponses.size(); e++ ) {
+
+		Serial.print( DiscriminationTask.CardinalDirectionsTask.userResponses.at( e ).trialNumber );
+		Serial.print( F( "\t" ) );
+		Serial.print( DiscriminationTask.CardinalDirectionsTask.userResponses.at( e ).promptDelayTimeMs );
+		Serial.print( F( "ms\t" ) );
+		Serial.print( DiscriminationTask.CardinalDirectionsTask.userResponses.at( e ).promptVal );
+		Serial.print( F( ", " ) );
+		Serial.print( DiscriminationTask.CardinalDirectionsTask.userResponses.at( e ).promptString );
+		Serial.print( F( "\t" ) );
+		Serial.print( DiscriminationTask.CardinalDirectionsTask.userResponses.at( e ).responseVal );
+		Serial.print( F( ", " ) );
+		Serial.print( DiscriminationTask.CardinalDirectionsTask.userResponses.at( e ).responseString );
+		Serial.print( F( "\t" ) );
+		Serial.print( DiscriminationTask.CardinalDirectionsTask.userResponses.at( e ).responseTimeMs );
+		Serial.print( F( "\t" ) );
+		Serial.print( DiscriminationTask.CardinalDirectionsTask.userResponses.at( e ).isResponseCorrect ? "CORRECT" : "WRONG" );
+		Serial.println();
+	}
+
+	Serial.println();
+}
+
+/**
+ * @brief Runs each individual trial
+ */
+void TaskManagerClass::RenderPromptCardinal() {
+
+	auto& trial = DiscriminationTask.CardinalDirectionsTask;
+
+	// Check trial number
+	// if ( trial.currentTrialNumber < trial.userResponses.size() ) {
+
+		const auto& entry = trial.userResponses.at( trial.currentTrialNumber );
+
+		// Render Prompt
+		Serial.print( "Prompt #" );
+		Serial.print( trial.currentTrialNumber );
+		Serial.print( " = " );
+		Serial.print( entry.promptVal );
+		Serial.print( ", " );
+		Serial.print( entry.promptString );
+		Serial.print( " >>> " );
+	// }
+}
+
+
+void TaskManagerClass::UpdateCardinalDiscriminationTask() {
+
+	// Serial.print( "." );
+
+	auto& T = DiscriminationTask.CardinalDirectionsTask;
+
+	switch ( T.state ) {
+
+		case TrialState::IDLE: {
+			// Serial.print( "I" );
+			break;
+		}
+		case TrialState::STARTING: {
+			
+			Serial.print( "Starting trial..." );
+
+			// Schedule first prompt
+			const auto& entry = T.userResponses.at( T.currentTrialNumber );
+			T.trialStartMs	  = millis();
+			T.promptAtMs	  = T.trialStartMs + entry.promptDelayTimeMs;
+			T.state			  = TrialState::WAITING_DELAY;
+			break;
+		}
+		case TrialState::WAITING_DELAY: {
+
+			Serial.print( "." );
+
+			uint32_t now = millis();
+
+			// Check if timer elapsed
+			if ( ( int32_t )( now - T.promptAtMs ) >= 0 ) {
+				RenderPromptCardinal();
+				T.promptShownMs = now;
+				T.state			= TrialState::RENDERING_PROMPT;
+			}
+			break;
+		}
+		case TrialState::RENDERING_PROMPT: {
+
+			Serial.print( "R" );
+
+			if ( T.gamepadResponse != -1 ) {
+				auto& entry			 = T.userResponses.at( T.currentTrialNumber );
+				entry.responseVal	 = T.gamepadResponse;
+				entry.responseString = DiscriminationTask.directionsMap[T.gamepadResponse].c_str();
+				entry.responseTimeMs = millis() - T.promptShownMs;
+				T.state				 = TrialState::FINISHING;
+			}
+			break;
+		}
+		case TrialState::FINISHING: {
+
+			// Serial.print( "F" );
+
+			++T.currentTrialNumber;
+			if ( T.currentTrialNumber >= T.userResponses.size() ) {
+
+				T.isTrialRunning = false;
+				T.state			 = TrialState::IDLE;
+				Serial.println( "Task complete" );
+
+			} else {
+
+				// Schedule next trial
+				const auto& next = T.userResponses.at( T.currentTrialNumber );
+				T.trialStartMs	 = millis();
+				T.promptAtMs	 = T.trialStartMs + next.promptDelayTimeMs;
+				T.state			 = TrialState::WAITING_DELAY;
+			}
+			break;
+		}
+		default: {
+			T.state = TrialState::IDLE;
+			break;
+		}
+	}
+}
+
+void TaskManagerClass::EnterResponse( int8_t response ) {
+
+	// Check for valid response
+	if ( response == -1 ) return;
+
+
+	auto& T = DiscriminationTask.CardinalDirectionsTask;
+	// Only accept input when a prompt is live
+	if ( T.state != TrialState::RENDERING_PROMPT ) return;
+
+	auto& rec			  = T.userResponses.at( T.currentTrialNumber );
+	rec.responseVal		  = response;
+	rec.responseString	  = DiscriminationTask.directionsMap.count( response ) ? DiscriminationTask.directionsMap[response].c_str() : "UNKNOWN";
+	rec.responseTimeMs	  = millis() - T.promptShownMs;
+	rec.isResponseCorrect = ( rec.responseVal == rec.promptVal );
+
+	// Advance state
+	T.state = TrialState::FINISHING;
+}

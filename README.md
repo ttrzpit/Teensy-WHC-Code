@@ -25,3 +25,18 @@ step 4 below will need to be repeated
 
 
 
+## Keyboard commands
+`     Set system state = IDLE
+1     Start / stop range of motion measurement
+2     Start / stop current limit measurement
+3     
+4     
+5     
+tNN   Set tension to NN% (and enable tension and output)
+T     Toggle tension enable / disable
+s     Print system state block
+S     Toggle scrolling system state
+z     Zero arm platform encoders
+Z     Zero motor encoders
+e     Enable motor output
+

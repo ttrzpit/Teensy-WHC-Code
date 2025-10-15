@@ -36,7 +36,10 @@ class GamepadClass {
 	uint8_t PIN_GAMEPAD_DIAGONAL = 40;	  // Analog input pin for diagonal inputs
 	uint8_t PIN_GAMEPAD_BUTTONS	 = 39;	  // Analog input pin for button inputs
 
-
+	public:
+	void Loop();	// Runs every loop
+	private:
+	void ParseButtonPress();	// Parses the button press into its output and name
 	/**************
 	*  Accessors  *
 	***************/

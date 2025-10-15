@@ -39,8 +39,31 @@ void AmplifierClass::Loop() {
 
 	// Read safety switch
 	ReadSafetySwitchState();
+
+	// Update global variables
+	UpdateSharedMemory();
 }
 
+
+/**
+ * @brief Update shared memeory elements
+ * 
+ */
+void AmplifierClass::UpdateSharedMemory() {
+
+	// Shared Memory Alias
+	static auto Shared = SYSTEM_GLOBAL.GetData();
+
+	// Motor current
+	// Shared->Sensors.MotorCurrents.measuredCurrentAmpsA = Sensors.measuredCurrentA;
+	// Shared->Sensors.MotorCurrents.measuredCurrentAmpsB = Sensors.measuredCurrentB;
+	// Shared->Sensors.MotorCurrents.measuredCurrentAmpsC = Sensors.measuredCurrentC;
+
+	// // Motor angles
+	// Shared->Sensors.MotorEncoders.measuredAngleDegA = Sensors.motorAngleDegA;
+	// Shared->Sensors.MotorEncoders.measuredAngleDegB = Sensors.motorAngleDegB;
+	// Shared->Sensors.MotorEncoders.measuredAngleDegC = Sensors.motorAngleDegC;
+}
 
 
 // /*  ============================================================================================
@@ -132,19 +155,19 @@ void AmplifierClass::InitializeAmplifierA() {
 	HWSerialA.clear();
 
 	// Read amplifier name
-	SendQueryA( ASCII.getName );
+	SendQueryA( HWSerial.Ascii.getName );
 	delay( 100 );
 
 	// Read to confirm connection update
-	SendQueryA( ASCII.getBaud );
+	SendQueryA( HWSerial.Ascii.getBaud );
 	delay( 100 );
 
 	// Set amplifier into PWM current-control mode
-	SendQueryA( ASCII.setCurrentMode );
+	SendQueryA( HWSerial.Ascii.setCurrentMode );
 	delay( 250 );
 
 	// Set amplifier into higher baud rate
-	SendQueryA( ASCII.setBaud115237 );
+	SendQueryA( HWSerial.Ascii.setBaud115237 );
 	delay( 100 );
 
 	// Restart HWSerialA connection
@@ -152,7 +175,7 @@ void AmplifierClass::InitializeAmplifierA() {
 	HWSerialA.begin( 115237 );
 
 	// Read to confirm connection update
-	SendQueryA( ASCII.getBaud );
+	SendQueryA( HWSerial.Ascii.getBaud );
 	delay( 100 );
 
 	// Send initial zero command to enable output
@@ -175,19 +198,19 @@ void AmplifierClass::InitializeAmplifierB() {
 	HWSerialB.clear();
 
 	// Read amplifier name
-	SendQueryB( ASCII.getName );
+	SendQueryB( HWSerial.Ascii.getName );
 	delay( 100 );
 
 	// Read to confirm connection update
-	SendQueryB( ASCII.getBaud );
+	SendQueryB( HWSerial.Ascii.getBaud );
 	delay( 100 );
 
 	// Set amplifier into PWM current-control mode
-	SendQueryB( ASCII.setCurrentMode );
+	SendQueryB( HWSerial.Ascii.setCurrentMode );
 	delay( 250 );
 
 	// Set amplifier into higher baud rate
-	SendQueryB( ASCII.setBaud115237 );
+	SendQueryB( HWSerial.Ascii.setBaud115237 );
 	delay( 100 );
 
 	// Restart HWSerialA connection
@@ -195,7 +218,7 @@ void AmplifierClass::InitializeAmplifierB() {
 	HWSerialB.begin( 115237 );
 
 	// Read to confirm connection update
-	SendQueryB( ASCII.getBaud );
+	SendQueryB( HWSerial.Ascii.getBaud );
 	delay( 100 );
 
 	Serial.println( F( "AMPLIFIER:     Amplifier B starting up...              Ready." ) );
@@ -215,19 +238,19 @@ void AmplifierClass::InitializeAmplifierC() {
 	HWSerialC.clear();
 
 	// Read amplifier name
-	SendQueryC( ASCII.getName );
+	SendQueryC( HWSerial.Ascii.getName );
 	delay( 100 );
 
 	// Read to confirm connection update
-	SendQueryC( ASCII.getBaud );
+	SendQueryC( HWSerial.Ascii.getBaud );
 	delay( 100 );
 
 	// Set amplifier into PWM current-control mode
-	SendQueryC( ASCII.setCurrentMode );
+	SendQueryC( HWSerial.Ascii.setCurrentMode );
 	delay( 250 );
 
 	// Set amplifier into higher baud rate
-	SendQueryC( ASCII.setBaud115237 );
+	SendQueryC( HWSerial.Ascii.setBaud115237 );
 	delay( 100 );
 
 	// Restart HWSerialA connection
@@ -235,7 +258,7 @@ void AmplifierClass::InitializeAmplifierC() {
 	HWSerialC.begin( 115237 );
 
 	// Read to confirm connection update
-	SendQueryC( ASCII.getBaud );
+	SendQueryC( HWSerial.Ascii.getBaud );
 	delay( 100 );
 
 	Serial.println( F( "AMPLIFIER:     Amplifier C starting up...              Ready." ) );
@@ -323,9 +346,6 @@ void serialEvent3() {
  */
 void AmplifierClass::OnHWSerialAEvent() {
 
-	// Shared Memory Alias
-	static auto Shared = SYSTEM_GLOBAL.GetData();
-
 	// Read data while buffer is populated
 	while ( HWSerialA.available() > 0 ) {
 
@@ -336,13 +356,13 @@ void AmplifierClass::OnHWSerialAEvent() {
 		if ( incomingChar == '\r' || incomingChar == '\n' ) {
 
 			// Make sure packet isn't empty
-			if ( Shared->Interface.HWSerial.Packets.respondingQueryA != "" ) {
+			if ( HWSerial.Packets.respondingQueryA != "" ) {
 
 				// Parse packet
 				ParseQueryA();
 			}
 		} else {
-			Shared->Interface.HWSerial.Packets.respondingQueryA += incomingChar;
+			HWSerial.Packets.respondingQueryA += incomingChar;
 		}
 	}
 }
@@ -351,9 +371,6 @@ void AmplifierClass::OnHWSerialAEvent() {
  * @brief Callback for HWSerialB (port 4)
  */
 void AmplifierClass::OnHWSerialBEvent() {
-
-	// Shared Memory Alias
-	static auto Shared = SYSTEM_GLOBAL.GetData();
 
 	// Read data while buffer is populated
 	while ( HWSerialB.available() > 0 ) {
@@ -365,13 +382,13 @@ void AmplifierClass::OnHWSerialBEvent() {
 		if ( incomingChar == '\r' || incomingChar == '\n' ) {
 
 			// Make sure packet isn't empty
-			if ( Shared->Interface.HWSerial.Packets.respondingQueryB != "" ) {
+			if ( HWSerial.Packets.respondingQueryB != "" ) {
 
 				// Parse packet
 				ParseQueryB();
 			}
 		} else {
-			Shared->Interface.HWSerial.Packets.respondingQueryB += incomingChar;
+			HWSerial.Packets.respondingQueryB += incomingChar;
 		}
 	}
 }
@@ -380,9 +397,6 @@ void AmplifierClass::OnHWSerialBEvent() {
  * @brief Callback for HWSerialC (port 3)
  */
 void AmplifierClass::OnHWSerialCEvent() {
-
-	// Shared Memory Alias
-	static auto Shared = SYSTEM_GLOBAL.GetData();
 
 	// Read data while buffer is populated
 	while ( HWSerialC.available() > 0 ) {
@@ -394,13 +408,13 @@ void AmplifierClass::OnHWSerialCEvent() {
 		if ( incomingChar == '\r' || incomingChar == '\n' ) {
 
 			// Make sure packet isn't empty
-			if ( Shared->Interface.HWSerial.Packets.respondingQueryC != "" ) {
+			if ( HWSerial.Packets.respondingQueryC != "" ) {
 
 				// Parse packet
 				ParseQueryC();
 			}
 		} else {
-			Shared->Interface.HWSerial.Packets.respondingQueryC += incomingChar;
+			HWSerial.Packets.respondingQueryC += incomingChar;
 		}
 	}
 }
@@ -416,11 +430,8 @@ void AmplifierClass::OnHWSerialCEvent() {
  */
 void AmplifierClass::SendQueryA( String newQuery ) {
 
-	// Shared Memory Alias
-	static auto Shared = SYSTEM_GLOBAL.GetData();
-
 	// Update outgoing query
-	Shared->Interface.HWSerial.Packets.outgoingQueryA = newQuery;
+	HWSerial.Packets.outgoingQueryA = newQuery;
 
 	// Send packet
 	HWSerialA.print( newQuery );
@@ -431,11 +442,8 @@ void AmplifierClass::SendQueryA( String newQuery ) {
  */
 void AmplifierClass::SendQueryB( String newQuery ) {
 
-	// Shared Memory Alias
-	static auto Shared = SYSTEM_GLOBAL.GetData();
-
 	// Update outgoing query
-	Shared->Interface.HWSerial.Packets.outgoingQueryB = newQuery;
+	HWSerial.Packets.outgoingQueryB = newQuery;
 
 	// Send packet
 	HWSerialB.print( newQuery );
@@ -446,11 +454,8 @@ void AmplifierClass::SendQueryB( String newQuery ) {
  */
 void AmplifierClass::SendQueryC( String newQuery ) {
 
-	// Shared Memory Alias
-	static auto Shared = SYSTEM_GLOBAL.GetData();
-
 	// Update outgoing query
-	Shared->Interface.HWSerial.Packets.outgoingQueryC = newQuery;
+	HWSerial.Packets.outgoingQueryC = newQuery;
 
 	// Send packet
 	HWSerialC.print( newQuery );
@@ -471,22 +476,24 @@ void AmplifierClass::ParseQueryA() {
 	static auto Shared = SYSTEM_GLOBAL.GetData();
 
 	// Extract response
-	String responseA = Shared->Interface.HWSerial.Packets.respondingQueryA;
+	String responseA = HWSerial.Packets.respondingQueryA;
+	// Serial.print( "DEBUG! Response: " );
+	// Serial.println( responseA );
 
 	if ( isVerboseOutputEnabled ) {
 		Serial.print( "  PacketA: " );
-		Serial.print( Shared->Interface.HWSerial.Packets.outgoingQueryA );
+		Serial.print( HWSerial.Packets.outgoingQueryA );
 		Serial.print( " --> " );
 		Serial.print( responseA );
 	}
 
 	// Get baud
-	if ( Shared->Interface.HWSerial.Packets.outgoingQueryA == ASCII.getBaud ) {
-		Shared->Interface.HWSerial.Connection.baudRateA = responseA.substring( 2, responseA.length() ).toInt();
+	if ( HWSerial.Packets.outgoingQueryA == HWSerial.Ascii.getBaud ) {
+		HWSerial.Properties.baudRateA = responseA.substring( 2, responseA.length() ).toInt();
 	}
 
 	// Get current reading
-	if ( Shared->Interface.HWSerial.Packets.outgoingQueryA == ASCII.getCurrentReading ) {
+	if ( HWSerial.Packets.outgoingQueryA == HWSerial.Ascii.getCurrentReading ) {
 		int32_t count									   = responseA.substring( 2, responseA.length() ).toInt();
 		Shared->Sensors.MotorCurrents.measuredCurrentAmpsA = float( count / 100.0f );
 
@@ -501,7 +508,7 @@ void AmplifierClass::ParseQueryA() {
 	}
 
 	// Get encoder reading
-	if ( Shared->Interface.HWSerial.Packets.outgoingQueryA == ASCII.getEncoderCount ) {
+	if ( HWSerial.Packets.outgoingQueryA == HWSerial.Ascii.getEncoderCount ) {
 		int32_t count									= responseA.substring( 2, responseA.length() ).toInt();
 		Shared->Sensors.MotorEncoders.rawCountA			= count;
 		Shared->Sensors.MotorEncoders.compensatedCountA = Shared->Sensors.MotorEncoders.rawCountA - Shared->Sensors.MotorEncoders.offsetToZeroA;
@@ -521,223 +528,214 @@ void AmplifierClass::ParseQueryA() {
 	}
 
 	// Get name
-	if ( Shared->Interface.HWSerial.Packets.outgoingQueryA == ASCII.getName ) {
-		Shared->Interface.HWSerial.Connection.ampNameA = responseA.substring( 2, responseA.length() );
+	if ( HWSerial.Packets.outgoingQueryA == HWSerial.Ascii.getName ) {
+		HWSerial.Properties.ampNameA = responseA.substring( 2, responseA.length() );
 	}
 
 	// Set 115237 baud rate
-	if ( Shared->Interface.HWSerial.Packets.outgoingQueryA == ASCII.setBaud115237 ) {
+	if ( HWSerial.Packets.outgoingQueryA == HWSerial.Ascii.setBaud115237 ) {
 		// Nothing to do
-		Shared->Interface.HWSerial.isConnected = true;
-		Shared->Interface.HWSerial.Connection.baudRateA = 115237;
 	}
 
 	// Set current-control mode
-	if ( Shared->Interface.HWSerial.Packets.outgoingQueryA == ASCII.setCurrentMode ) {
+	if ( HWSerial.Packets.outgoingQueryA == HWSerial.Ascii.setCurrentMode ) {
 
 		// Make sure amplifier acknowledged mode change
 		if ( responseA == "ok" ) {
-			Shared->Drive.Flags.isCurrentControlled = true;
+			Command.Flags.isCurrentCOmmandedA = true;
 		} else {
-			Shared->Drive.Flags.isCurrentControlled = false;
+			Command.Flags.isCurrentCOmmandedA = false;
 			Serial.println( F( "Amplifier A current command change failed!" ) );
 		}
 	}
 
 	// Set amp initial state (reset)
-	if ( Shared->Interface.HWSerial.Packets.outgoingQueryA == ASCII.setReset ) {
+	if ( HWSerial.Packets.outgoingQueryA == HWSerial.Ascii.setReset ) {
 		Serial.println( "Resetting" );
 	}
 
 	// Clear packet info
-	Shared->Interface.HWSerial.Packets.outgoingQueryA	= ASCII.setIdle;
-	Shared->Interface.HWSerial.Packets.respondingQueryA = "";
+	HWSerial.Packets.outgoingQueryA	  = HWSerial.Ascii.setIdle;
+	HWSerial.Packets.respondingQueryA = "";
 }
-
-
 
 /**
  * @brief Parse packet from amp B
  */
 void AmplifierClass::ParseQueryB() {
 
-	// Shared Memory Alias
-	static auto Shared = SYSTEM_GLOBAL.GetData();
-
 	// Extract response
-	String responseB = Shared->Interface.HWSerial.Packets.respondingQueryB;
+	String responseB = HWSerial.Packets.respondingQueryB;
+	// Serial.print( "DEBUG! Response: " );
+	// Serial.println( responseA );
 
 	if ( isVerboseOutputEnabled ) {
-		Serial.print( "  PacketB: " );
-		Serial.print( Shared->Interface.HWSerial.Packets.outgoingQueryB );
+		Serial.print( "\t\tPacketB: " );
+		Serial.print( HWSerial.Packets.outgoingQueryB );
 		Serial.print( " --> " );
 		Serial.print( responseB );
 	}
 
 	// Get baud
-	if ( Shared->Interface.HWSerial.Packets.outgoingQueryB == ASCII.getBaud ) {
-		Shared->Interface.HWSerial.Connection.baudRateB = responseB.substring( 2, responseB.length() ).toInt();
+	if ( HWSerial.Packets.outgoingQueryB == HWSerial.Ascii.getBaud ) {
+		HWSerial.Properties.baudRateB = responseB.substring( 2, responseB.length() ).toInt();
 	}
 
 	// Get current reading
-	if ( Shared->Interface.HWSerial.Packets.outgoingQueryB == ASCII.getCurrentReading ) {
-		int32_t count									   = responseB.substring( 2, responseB.length() ).toInt();
-		Shared->Sensors.MotorCurrents.measuredCurrentAmpsB = float( count / 100.0f );
+	if ( HWSerial.Packets.outgoingQueryB == HWSerial.Ascii.getCurrentReading ) {
+		int32_t count			 = responseB.substring( 2, responseB.length() ).toInt();
+		Sensors.measuredCurrentB = float( count / 100.0f );
 
 		// Update current if being measured
-		if ( Shared->Sensors.MotorCurrents.Limits.isBeingMeasured ) {
+		if ( Command.Limits.isCurrentLimitBeingMeasured ) {
 
-			// Record limit A if larger than previous
-			if ( Shared->Sensors.MotorCurrents.measuredCurrentAmpsB > Shared->Sensors.MotorCurrents.Limits.limitB ) {
-				Shared->Sensors.MotorCurrents.Limits.limitB = Shared->Sensors.MotorCurrents.measuredCurrentAmpsB;
+			// Record limit B if larger than previous
+			if ( Sensors.measuredCurrentB > Command.Limits.currentLimitB ) {
+				Command.Limits.currentLimitB = Sensors.measuredCurrentB;
 			}
 		}
 	}
 
 	// Get encoder reading
-	if ( Shared->Interface.HWSerial.Packets.outgoingQueryB == ASCII.getEncoderCount ) {
-		int32_t count									= responseB.substring( 2, responseB.length() ).toInt();
-		Shared->Sensors.MotorEncoders.rawCountB			= count;
-		Shared->Sensors.MotorEncoders.compensatedCountB = Shared->Sensors.MotorEncoders.rawCountB - Shared->Sensors.MotorEncoders.offsetToZeroB;
-		Shared->Sensors.MotorEncoders.measuredAngleDegB = degrees( Shared->Sensors.MotorEncoders.compensatedCountB * 2.0f * M_PI / 4096.0f );
+	if ( HWSerial.Packets.outgoingQueryB == HWSerial.Ascii.getEncoderCount ) {
+		int32_t count					 = responseB.substring( 2, responseB.length() ).toInt();
+		Sensors.measuredEncoderCountB	 = count;
+		Sensors.compensatedEncoderCountB = Sensors.measuredEncoderCountB - Sensors.encoderZeroOffsetB;
+		Sensors.motorAngleDegB			 = degrees( Sensors.compensatedEncoderCountB * 2.0f * M_PI / 4096.0f );
 
 		// Update limit if being measured
-		if ( Shared->Sensors.MotorEncoders.Limits.isBeingMeasured ) {
+		if ( Command.Limits.isEncoderLimitBeingMeasured ) {
 
 			// Record limit A if larger than previous
-			if ( Shared->Sensors.MotorEncoders.compensatedCountB > Shared->Sensors.MotorEncoders.Limits.limitCountB ) {
+			if ( Sensors.compensatedEncoderCountB > Command.Limits.encoderLimitB ) {
 
 				// Save limit
-				Shared->Sensors.MotorEncoders.Limits.limitCountB  = Shared->Sensors.MotorEncoders.compensatedCountB;
-				Shared->Sensors.MotorEncoders.Limits.limitPhiDegB = degrees( Shared->Sensors.MotorEncoders.compensatedCountB * 2.0f * M_PI / 4096.0f );
+				Command.Limits.encoderLimitB = Sensors.compensatedEncoderCountB;
+				Command.Limits.phiLimitDegB	 = degrees( Sensors.compensatedEncoderCountB * 2.0f * M_PI / 4096.0f );
 			}
 		}
 	}
 
 	// Get name
-	if ( Shared->Interface.HWSerial.Packets.outgoingQueryB == ASCII.getName ) {
-		Shared->Interface.HWSerial.Connection.ampNameB = responseB.substring( 2, responseB.length() );
+	if ( HWSerial.Packets.outgoingQueryB == HWSerial.Ascii.getName ) {
+		HWSerial.Properties.ampNameB = responseB.substring( 2, responseB.length() );
 	}
 
 	// Set 115237 baud rate
-	if ( Shared->Interface.HWSerial.Packets.outgoingQueryB == ASCII.setBaud115237 ) {
-		Shared->Interface.HWSerial.isConnected = true;
-		Shared->Interface.HWSerial.Connection.baudRateB = 115237;
+	if ( HWSerial.Packets.outgoingQueryB == HWSerial.Ascii.setBaud115237 ) {
+		// Nothing
 	}
 
 	// Set current-control mode
-	if ( Shared->Interface.HWSerial.Packets.outgoingQueryB == ASCII.setCurrentMode ) {
+	if ( HWSerial.Packets.outgoingQueryB == HWSerial.Ascii.setCurrentMode ) {
 
 		// Make sure amplifier acknowledged mode change
 		if ( responseB == "ok" ) {
-			Shared->Drive.Flags.isCurrentControlled = true;
+			Command.Flags.isCurrentCOmmandedB = true;
 		} else {
-			Shared->Drive.Flags.isCurrentControlled = false;
+			Command.Flags.isCurrentCOmmandedB = false;
 			Serial.println( F( "Amplifier B current command change failed!" ) );
 		}
 	}
 
 	// Set amp initial state (reset)
-	if ( Shared->Interface.HWSerial.Packets.outgoingQueryB == ASCII.setReset ) {
+	if ( HWSerial.Packets.outgoingQueryB == HWSerial.Ascii.setReset ) {
 		Serial.println( "Resetting" );
 	}
 
 	// Clear packet info
-	Shared->Interface.HWSerial.Packets.outgoingQueryB	= ASCII.setIdle;
-	Shared->Interface.HWSerial.Packets.respondingQueryB = "";
+	HWSerial.Packets.outgoingQueryB	  = HWSerial.Ascii.setIdle;
+	HWSerial.Packets.respondingQueryB = "";
 }
 
-
-
 /**
- * @brief Parse packet from amp C
+ * @brief Parse packet from amp B
  */
 void AmplifierClass::ParseQueryC() {
 
-	// Shared Memory Alias
-	static auto Shared = SYSTEM_GLOBAL.GetData();
-
 	// Extract response
-	String responseC = Shared->Interface.HWSerial.Packets.respondingQueryC;
+	String responseC = HWSerial.Packets.respondingQueryC;
+	// Serial.print( "DEBUG! Response: " );
+	// Serial.println( responseA );
 
 	if ( isVerboseOutputEnabled ) {
-		Serial.print( "  PacketC: " );
-		Serial.print( Shared->Interface.HWSerial.Packets.outgoingQueryC );
+		Serial.print( "\t\tPacketC: " );
+		Serial.print( HWSerial.Packets.outgoingQueryC );
 		Serial.print( " --> " );
 		Serial.print( responseC );
+		Serial.println();
 	}
 
 	// Get baud
-	if ( Shared->Interface.HWSerial.Packets.outgoingQueryC == ASCII.getBaud ) {
-		Shared->Interface.HWSerial.Connection.baudRateC = responseC.substring( 2, responseC.length() ).toInt();
+	if ( HWSerial.Packets.outgoingQueryC == HWSerial.Ascii.getBaud ) {
+		HWSerial.Properties.baudRateC = responseC.substring( 2, responseC.length() ).toInt();
 	}
 
 	// Get current reading
-	if ( Shared->Interface.HWSerial.Packets.outgoingQueryC == ASCII.getCurrentReading ) {
-		int32_t count									   = responseC.substring( 2, responseC.length() ).toInt();
-		Shared->Sensors.MotorCurrents.measuredCurrentAmpsC = float( count / 100.0f );
+	if ( HWSerial.Packets.outgoingQueryC == HWSerial.Ascii.getCurrentReading ) {
+		int32_t count			 = responseC.substring( 2, responseC.length() ).toInt();
+		Sensors.measuredCurrentC = float( count / 100.0f );
 
 		// Update current if being measured
-		if ( Shared->Sensors.MotorCurrents.Limits.isBeingMeasured ) {
+		if ( Command.Limits.isCurrentLimitBeingMeasured ) {
 
-			// Record limit A if larger than previous
-			if ( Shared->Sensors.MotorCurrents.measuredCurrentAmpsC > Shared->Sensors.MotorCurrents.Limits.limitC ) {
-				Shared->Sensors.MotorCurrents.Limits.limitC = Shared->Sensors.MotorCurrents.measuredCurrentAmpsC;
+			// Record limit C if larger than previous
+			if ( Sensors.measuredCurrentC > Command.Limits.currentLimitC ) {
+				Command.Limits.currentLimitC = Sensors.measuredCurrentC;
 			}
 		}
 	}
 
 	// Get encoder reading
-	if ( Shared->Interface.HWSerial.Packets.outgoingQueryC == ASCII.getEncoderCount ) {
-		int32_t count									= responseC.substring( 2, responseC.length() ).toInt();
-		Shared->Sensors.MotorEncoders.rawCountC			= count;
-		Shared->Sensors.MotorEncoders.compensatedCountC = Shared->Sensors.MotorEncoders.rawCountC - Shared->Sensors.MotorEncoders.offsetToZeroC;
-		Shared->Sensors.MotorEncoders.measuredAngleDegC = degrees( Shared->Sensors.MotorEncoders.compensatedCountC * 2.0f * M_PI / 4096.0f );
+	if ( HWSerial.Packets.outgoingQueryC == HWSerial.Ascii.getEncoderCount ) {
+		int32_t count					 = responseC.substring( 2, responseC.length() ).toInt();
+		Sensors.measuredEncoderCountC	 = count;
+		Sensors.compensatedEncoderCountC = Sensors.measuredEncoderCountC - Sensors.encoderZeroOffsetC;
+		Sensors.motorAngleDegC			 = degrees( Sensors.compensatedEncoderCountC * 2.0f * M_PI / 4096.0f );
 
 		// Update limit if being measured
-		if ( Shared->Sensors.MotorEncoders.Limits.isBeingMeasured ) {
+		if ( Command.Limits.isEncoderLimitBeingMeasured ) {
 
-			// Record limit C if larger than previous
-			if ( Shared->Sensors.MotorEncoders.compensatedCountC > Shared->Sensors.MotorEncoders.Limits.limitCountC ) {
+			// Record limit A if larger than previous
+			if ( Sensors.compensatedEncoderCountC > Command.Limits.encoderLimitC ) {
 
 				// Save limit
-				Shared->Sensors.MotorEncoders.Limits.limitCountC  = Shared->Sensors.MotorEncoders.compensatedCountC;
-				Shared->Sensors.MotorEncoders.Limits.limitPhiDegC = degrees( Shared->Sensors.MotorEncoders.compensatedCountC * 2.0f * M_PI / 4096.0f );
+				Command.Limits.encoderLimitC = Sensors.compensatedEncoderCountC;
+				Command.Limits.phiLimitDegC	 = degrees( Sensors.compensatedEncoderCountC * 2.0f * M_PI / 4096.0f );
 			}
 		}
 	}
 
 	// Get name
-	if ( Shared->Interface.HWSerial.Packets.outgoingQueryC == ASCII.getName ) {
-		Shared->Interface.HWSerial.Connection.ampNameC = responseC.substring( 2, responseC.length() );
+	if ( HWSerial.Packets.outgoingQueryC == HWSerial.Ascii.getName ) {
+		HWSerial.Properties.ampNameC = responseC.substring( 2, responseC.length() );
 	}
 
 	// Set 115237 baud rate
-	if ( Shared->Interface.HWSerial.Packets.outgoingQueryC == ASCII.setBaud115237 ) {
-		Shared->Interface.HWSerial.isConnected = true;
-		Shared->Interface.HWSerial.Connection.baudRateC = 115237;
+	if ( HWSerial.Packets.outgoingQueryC == HWSerial.Ascii.setBaud115237 ) {
+		// Nothing
 	}
 
 	// Set current-control mode
-	if ( Shared->Interface.HWSerial.Packets.outgoingQueryC == ASCII.setCurrentMode ) {
+	if ( HWSerial.Packets.outgoingQueryC == HWSerial.Ascii.setCurrentMode ) {
 
 		// Make sure amplifier acknowledged mode change
 		if ( responseC == "ok" ) {
-			Shared->Drive.Flags.isCurrentControlled = true;
+			Command.Flags.isCurrentCOmmandedC = true;
 		} else {
-			Shared->Drive.Flags.isCurrentControlled = false;
+			Command.Flags.isCurrentCOmmandedC = false;
 			Serial.println( F( "Amplifier C current command change failed!" ) );
 		}
 	}
 
 	// Set amp initial state (reset)
-	if ( Shared->Interface.HWSerial.Packets.outgoingQueryC == ASCII.setReset ) {
+	if ( HWSerial.Packets.outgoingQueryC == HWSerial.Ascii.setReset ) {
 		Serial.println( "Resetting" );
 	}
 
 	// Clear packet info
-	Shared->Interface.HWSerial.Packets.outgoingQueryC	= ASCII.setIdle;
-	Shared->Interface.HWSerial.Packets.respondingQueryC = "";
+	HWSerial.Packets.outgoingQueryC	  = HWSerial.Ascii.setIdle;
+	HWSerial.Packets.respondingQueryC = "";
 }
 
 
@@ -783,37 +781,37 @@ void AmplifierClass::ReadSensors() {
 	if ( activeQuery == 0 ) {
 
 		// Read amplifierA current
-		SendQueryA( ASCII.getCurrentReading );
+		SendQueryA( HWSerial.Ascii.getCurrentReading );
 		activeQuery++;
 
 	} else if ( activeQuery == 1 ) {
 
 		// Read amplifierB current
-		SendQueryB( ASCII.getCurrentReading );
+		SendQueryB( HWSerial.Ascii.getCurrentReading );
 		activeQuery++;
 
 	} else if ( activeQuery == 2 ) {
 
 		// Read amplifierB current
-		SendQueryC( ASCII.getCurrentReading );
+		SendQueryC( HWSerial.Ascii.getCurrentReading );
 		activeQuery++;
 
 	} else if ( activeQuery == 3 ) {
 
 		// Read amplifierB current
-		SendQueryA( ASCII.getEncoderCount );
+		SendQueryA( HWSerial.Ascii.getEncoderCount );
 		activeQuery++;
 
 	} else if ( activeQuery == 4 ) {
 
 		// Read amplifierB current
-		SendQueryB( ASCII.getEncoderCount );
+		SendQueryB( HWSerial.Ascii.getEncoderCount );
 		activeQuery++;
 
 	} else if ( activeQuery == 5 ) {
 
 		// Read amplifierB current
-		SendQueryC( ASCII.getEncoderCount );
+		SendQueryC( HWSerial.Ascii.getEncoderCount );
 		activeQuery = 0;
 
 	} else {
@@ -834,22 +832,18 @@ void AmplifierClass::ReadSensors() {
  */
 void AmplifierClass::ZeroMotorEncoders() {
 
-	// Shared Memory Alias
-	static auto Shared = SYSTEM_GLOBAL.GetData();
-
-	// Save previous value as offset
-	Shared->Sensors.MotorEncoders.offsetToZeroA = Shared->Sensors.MotorEncoders.rawCountA;
-	Shared->Sensors.MotorEncoders.offsetToZeroB = Shared->Sensors.MotorEncoders.rawCountB;
-	Shared->Sensors.MotorEncoders.offsetToZeroC = Shared->Sensors.MotorEncoders.rawCountC;
+	// Save
+	Sensors.encoderZeroOffsetA = Sensors.measuredEncoderCountA;
+	Sensors.encoderZeroOffsetB = Sensors.measuredEncoderCountB;
+	Sensors.encoderZeroOffsetC = Sensors.measuredEncoderCountC;
 
 	// Zero limits
-	Shared->Sensors.MotorEncoders.Limits.limitCountA = 0;
-	Shared->Sensors.MotorEncoders.Limits.limitCountB = 0;
-	Shared->Sensors.MotorEncoders.Limits.limitCountC = 0;
-
-	Shared->Sensors.MotorEncoders.Limits.limitPhiDegA = 0;
-	Shared->Sensors.MotorEncoders.Limits.limitPhiDegB = 0;
-	Shared->Sensors.MotorEncoders.Limits.limitPhiDegC = 0;
+	Command.Limits.encoderLimitA = 0;
+	Command.Limits.encoderLimitB = 0;
+	Command.Limits.encoderLimitC = 0;
+	Command.Limits.phiLimitDegA	 = 0;
+	Command.Limits.phiLimitDegB	 = 0;
+	Command.Limits.phiLimitDegC	 = 0;
 
 	// Reset action flag
 	SYSTEM_GLOBAL.ResetActionFlag( SYSTEM_GLOBAL.GetData()->ActionQueue.zeroMotorEncoders );
@@ -935,32 +929,32 @@ void AmplifierClass::ZeroMotorEncoders() {
 // === GET AMPLIFIER NAME =========================================================================
 // ================================================================================================
 
-// /**
-//  * @brief Gets the name of amplifier A
-//  * @return * String Name of amplifier
-//  */
-// String AmplifierClass::GetAmplifierNameA() {
+/**
+ * @brief Gets the name of amplifier A
+ * @return * String Name of amplifier
+ */
+String AmplifierClass::GetAmplifierNameA() {
 
-// 	return HWSerial.Properties.ampNameA;
-// }
+	return HWSerial.Properties.ampNameA;
+}
 
-// /**
-//  * @brief Gets the name of amplifier B
-//  * @return * String Name of amplifier
-//  */
-// String AmplifierClass::GetAmplifierNameB() {
+/**
+ * @brief Gets the name of amplifier B
+ * @return * String Name of amplifier
+ */
+String AmplifierClass::GetAmplifierNameB() {
 
-// 	return HWSerial.Properties.ampNameB;
-// }
+	return HWSerial.Properties.ampNameB;
+}
 
-// /**
-//  * @brief Gets the name of amplifier C
-//  * @return * String Name of amplifier
-//  */
-// String AmplifierClass::GetAmplifierNameC() {
+/**
+ * @brief Gets the name of amplifier C
+ * @return * String Name of amplifier
+ */
+String AmplifierClass::GetAmplifierNameC() {
 
-// 	return HWSerial.Properties.ampNameC;
-// }
+	return HWSerial.Properties.ampNameC;
+}
 
 
 
@@ -968,32 +962,32 @@ void AmplifierClass::ZeroMotorEncoders() {
 // === GET BAUD RATE ==============================================================================
 // ================================================================================================
 
-// /**
-//  * @brief Returns the baud rate of amp A
-//  * @return int32_t baud rate
-//  */
-// int32_t AmplifierClass::GetBaudA() {
+/**
+ * @brief Returns the baud rate of amp A
+ * @return int32_t baud rate
+ */
+int32_t AmplifierClass::GetBaudA() {
 
-// 	return HWSerial.Properties.baudRateA;
-// }
+	return HWSerial.Properties.baudRateA;
+}
 
-// /**
-//  * @brief Returns the baud rate of amp B
-//  * @return int32_t baud rate
-//  */
-// int32_t AmplifierClass::GetBaudB() {
+/**
+ * @brief Returns the baud rate of amp B
+ * @return int32_t baud rate
+ */
+int32_t AmplifierClass::GetBaudB() {
 
-// 	return HWSerial.Properties.baudRateB;
-// }
+	return HWSerial.Properties.baudRateB;
+}
 
-// /**
-//  * @brief Returns the baud rate of amp C
-//  * @return int32_t baud rate
-//  */
-// int32_t AmplifierClass::GetBaudC() {
+/**
+ * @brief Returns the baud rate of amp C
+ * @return int32_t baud rate
+ */
+int32_t AmplifierClass::GetBaudC() {
 
-// 	return HWSerial.Properties.baudRateC;
-// }
+	return HWSerial.Properties.baudRateC;
+}
 
 
 
@@ -1001,32 +995,32 @@ void AmplifierClass::ZeroMotorEncoders() {
 // === GET CURRENT MEASUREMENT ====================================================================
 // ================================================================================================
 
-// /**
-//   * @brief Returns the measured current for amplifier A
-//   * @return float Current (in amps)
-//   */
-// float AmplifierClass::GetCurrentReadingA() {
+/**
+  * @brief Returns the measured current for amplifier A
+  * @return float Current (in amps)
+  */
+float AmplifierClass::GetCurrentReadingA() {
 
-// 	return Sensors.measuredCurrentA;
-// }
+	return Sensors.measuredCurrentA;
+}
 
-// /**
-//   * @brief Returns the measured current for amplifier B
-//   * @return float Current (in amps)
-//   */
-// float AmplifierClass::GetCurrentReadingB() {
+/**
+  * @brief Returns the measured current for amplifier B
+  * @return float Current (in amps)
+  */
+float AmplifierClass::GetCurrentReadingB() {
 
-// 	return Sensors.measuredCurrentB;
-// }
+	return Sensors.measuredCurrentB;
+}
 
-// /**
-//   * @brief Returns the measured current for amplifier A
-//   * @return float Current (in amps)
-//   */
-// float AmplifierClass::GetCurrentReadingC() {
+/**
+  * @brief Returns the measured current for amplifier A
+  * @return float Current (in amps)
+  */
+float AmplifierClass::GetCurrentReadingC() {
 
-// 	return Sensors.measuredCurrentC;
-// }
+	return Sensors.measuredCurrentC;
+}
 
 
 
@@ -1043,6 +1037,7 @@ void AmplifierClass::SetTension() {
 	static auto Shared = SYSTEM_GLOBAL.GetData();
 
 	// Update variables
+	Command.Flags.isOutputEnabled			 = true;
 	Shared->Drive.Flags.isMotorOutputEnabled = true;
 
 	// Calculate appropriate tension
@@ -1059,31 +1054,31 @@ void AmplifierClass::SetTension() {
 // ================================================================================================
 
 /**
-//  * @brief Returns the angle of amp encoder A
-//  * @return float angle in degrees
-//  */
-// float AmplifierClass::GetAngleDegA() {
+ * @brief Returns the angle of amp encoder A
+ * @return float angle in degrees
+ */
+float AmplifierClass::GetAngleDegA() {
 
-// 	return Sensors.motorAngleDegA;
-// }
+	return Sensors.motorAngleDegA;
+}
 
-// /**
-//  * @brief Returns the angle of amp encoder B
-//  * @return float angle in degrees
-//  */
-// float AmplifierClass::GetAngleDegB() {
+/**
+ * @brief Returns the angle of amp encoder B
+ * @return float angle in degrees
+ */
+float AmplifierClass::GetAngleDegB() {
 
-// 	return Sensors.motorAngleDegB;
-// }
+	return Sensors.motorAngleDegB;
+}
 
-// /**
-//  * @brief Returns the angle of amp encoder B
-//  * @return float angle in degrees
-//  */
-// float AmplifierClass::GetAngleDegC() {
+/**
+ * @brief Returns the angle of amp encoder B
+ * @return float angle in degrees
+ */
+float AmplifierClass::GetAngleDegC() {
 
-// 	return Sensors.motorAngleDegC;
-// }
+	return Sensors.motorAngleDegC;
+}
 
 
 
@@ -1092,31 +1087,31 @@ void AmplifierClass::SetTension() {
 // ================================================================================================
 
 /**
-//  * @brief Returns the angle of amp encoder A
-//  * @return float angle in degrees
-//  */
-// int32_t AmplifierClass::GetEncoderCountA() {
+ * @brief Returns the angle of amp encoder A
+ * @return float angle in degrees
+ */
+int32_t AmplifierClass::GetEncoderCountA() {
 
-// 	return Sensors.compensatedEncoderCountA;
-// }
+	return Sensors.compensatedEncoderCountA;
+}
 
-// /**
-//  * @brief Returns the angle of amp encoder B
-//  * @return float angle in degrees
-//  */
-// int32_t AmplifierClass::GetEncoderCountB() {
+/**
+ * @brief Returns the angle of amp encoder B
+ * @return float angle in degrees
+ */
+int32_t AmplifierClass::GetEncoderCountB() {
 
-// 	return Sensors.compensatedEncoderCountB;
-// }
+	return Sensors.compensatedEncoderCountB;
+}
 
-// /**
-//  * @brief Returns the angle of amp encoder C
-//  * @return float angle in degrees
-//  */
-// int32_t AmplifierClass::GetEncoderCountC() {
+/**
+ * @brief Returns the angle of amp encoder C
+ * @return float angle in degrees
+ */
+int32_t AmplifierClass::GetEncoderCountC() {
 
-// 	return Sensors.compensatedEncoderCountC;
-// }
+	return Sensors.compensatedEncoderCountC;
+}
 
 
 
@@ -1135,26 +1130,26 @@ float AmplifierClass::GetCurrentFromIntegerPercentage( uint8_t percentValue ) {
 	return float( percentValue / 100.0f * 1.89f );
 }
 
-// /**
-//  * @brief Return state of the amplifier
-//  *
-//  * @return true 	Amplifier running
-//  * @return false 	Amplifier disabled
-//  */
-// bool AmplifierClass::GetAmplifierOutputState() {
+/**
+ * @brief Return state of the amplifier
+ * 
+ * @return true 	Amplifier running
+ * @return false 	Amplifier disabled
+ */
+bool AmplifierClass::GetAmplifierOutputState() {
 
-// 	return Command.Flags.isOutputEnabled;
-// }
+	return Command.Flags.isOutputEnabled;
+}
 
-// /**
-//  * @brief Sets the amplifier output state
-//  *
-//  * @param newState State of amplifier output
-//  */
-// void AmplifierClass::SetAmplifierOutputState( bool newState ) {
+/**
+ * @brief Sets the amplifier output state
+ * 
+ * @param newState State of amplifier output
+ */
+void AmplifierClass::SetAmplifierOutputState( bool newState ) {
 
-// 	Command.Flags.isOutputEnabled = newState;
-// }
+	Command.Flags.isOutputEnabled = newState;
+}
 
 
 
@@ -1163,73 +1158,73 @@ float AmplifierClass::GetCurrentFromIntegerPercentage( uint8_t percentValue ) {
  ****************/
 
 
-// /**
-//  * @brief Returns the PWM limit for the amp
-//  */
-// int16_t AmplifierClass::GetAmplifierPwmPowerLimitA() {
+/**
+ * @brief Returns the PWM limit for the amp
+ */
+int16_t AmplifierClass::GetAmplifierPwmPowerLimitA() {
 
-// 	return Command.Limits.pwmLimitA;	// Return amp PWM Limit
-// }
-
-
-// /**
-//  * @brief Returns the PWM limit for the amp
-//  */
-// int16_t AmplifierClass::GetAmplifierPwmPowerLimitB() {
-
-// 	return Command.Limits.pwmLimitB;	// Return amp PWM Limit
-// }
+	return Command.Limits.pwmLimitA;	// Return amp PWM Limit
+}
 
 
-// /**
-//  * @brief Returns the PWM limit for the amp
-//  */
-// int16_t AmplifierClass::GetAmplifierPwmPowerLimitC() {
+/**
+ * @brief Returns the PWM limit for the amp
+ */
+int16_t AmplifierClass::GetAmplifierPwmPowerLimitB() {
 
-// 	return Command.Limits.pwmLimitC;	// Return amp PWM Limit
-// }
-
-
-// /**
-//  * @brief Set the state of amplifier limits
-//  * @param newState Enable / disable limits
-//  */
-// void AmplifierClass::SetIsAmplifierPowerLimitApplied( bool newState ) {
-
-// 	Command.Limits.isAmplifierPowerLimitApplied = newState;
-// }
+	return Command.Limits.pwmLimitB;	// Return amp PWM Limit
+}
 
 
-// /**
-//  * @brief Set the flag that limits have been measured
-//  * @param newState Toggle flag
-//  */
-// void AmplifierClass::SetIsAmplifierPowerLimitSet( bool newState ) {
+/**
+ * @brief Returns the PWM limit for the amp
+ */
+int16_t AmplifierClass::GetAmplifierPwmPowerLimitC() {
 
-// 	Command.Limits.isAmplifierPowerLimitSet = newState;
-// }
-
-
-// /**
-//  * @brief Check if limits have been set
-//  * @return true Limits set
-//  * @return false Limits not set
-//  */
-// bool AmplifierClass::GetIsAmplifierPowerLimitSet() {
-
-// 	return Command.Limits.isAmplifierPowerLimitSet;
-// }
+	return Command.Limits.pwmLimitC;	// Return amp PWM Limit
+}
 
 
-// /**
-//  * @brief Check if limits are being applied
-//  * @return true Limits applied
-//  * @return false Limits not applied
-//  */
-// bool AmplifierClass::GetIsAmplifierPowerLimitApplied() {
+/**
+ * @brief Set the state of amplifier limits
+ * @param newState Enable / disable limits
+ */
+void AmplifierClass::SetIsAmplifierPowerLimitApplied( bool newState ) {
 
-// 	return Command.Limits.isAmplifierPowerLimitApplied;
-// }
+	Command.Limits.isAmplifierPowerLimitApplied = newState;
+}
+
+
+/**
+ * @brief Set the flag that limits have been measured
+ * @param newState Toggle flag
+ */
+void AmplifierClass::SetIsAmplifierPowerLimitSet( bool newState ) {
+
+	Command.Limits.isAmplifierPowerLimitSet = newState;
+}
+
+
+/**
+ * @brief Check if limits have been set
+ * @return true Limits set
+ * @return false Limits not set
+ */
+bool AmplifierClass::GetIsAmplifierPowerLimitSet() {
+
+	return Command.Limits.isAmplifierPowerLimitSet;
+}
+
+
+/**
+ * @brief Check if limits are being applied
+ * @return true Limits applied
+ * @return false Limits not applied
+ */
+bool AmplifierClass::GetIsAmplifierPowerLimitApplied() {
+
+	return Command.Limits.isAmplifierPowerLimitApplied;
+}
 
 
 
@@ -1238,73 +1233,73 @@ float AmplifierClass::GetCurrentFromIntegerPercentage( uint8_t percentValue ) {
  ****************/
 
 
-// /**
-//  * @brief Returns the encoder limit for the amp
-//  */
-// float AmplifierClass::GetAmplifierEncoderLimitA() {
+/**
+ * @brief Returns the encoder limit for the amp
+ */
+float AmplifierClass::GetAmplifierEncoderLimitA() {
 
-// 	return Command.Limits.phiLimitDegA;	   // Return amp PWM Limit
-// }
-
-
-// /**
-//  * @brief Returns the encoder limit for the amp
-//  */
-// float AmplifierClass::GetAmplifierEncoderLimitB() {
-
-// 	return Command.Limits.phiLimitDegB;	   // Return amp PWM Limit
-// }
+	return Command.Limits.phiLimitDegA;	   // Return amp PWM Limit
+}
 
 
-// /**
-//  * @brief Returns the encoder limit for the amp
-//  */
-// float AmplifierClass::GetAmplifierEncoderLimitC() {
+/**
+ * @brief Returns the encoder limit for the amp
+ */
+float AmplifierClass::GetAmplifierEncoderLimitB() {
 
-// 	return Command.Limits.phiLimitDegC;	   // Return amp PWM Limit
-// }
-
-
-// /**
-//  * @brief Set the state of amplifier encoder limit
-//  * @param newState Enable / disable limits
-//  */
-// void AmplifierClass::SetIsAmplifierEncoderLimitApplied( bool newState ) {
-
-// 	Command.Limits.isEncoderLimitApplied = newState;
-// }
+	return Command.Limits.phiLimitDegB;	   // Return amp PWM Limit
+}
 
 
-// /**
-//  * @brief Set the flag that limits have been measured
-//  * @param newState Toggle flag
-//  */
-// void AmplifierClass::SetIsAmplifierEncoderLimitSet( bool newState ) {
+/**
+ * @brief Returns the encoder limit for the amp
+ */
+float AmplifierClass::GetAmplifierEncoderLimitC() {
 
-// 	Command.Limits.isEncoderLimitSet = newState;
-// }
-
-
-// /**
-//  * @brief Check if limits have been set
-//  * @return true Limits set
-//  * @return false Limits not set
-//  */
-// bool AmplifierClass::GetIsAmplifierEncoderLimitSet() {
-
-// 	return Command.Limits.isEncoderLimitSet;
-// }
+	return Command.Limits.phiLimitDegC;	   // Return amp PWM Limit
+}
 
 
-// /**
-//  * @brief Check if limits are being applied
-//  * @return true Limits applied
-//  * @return false Limits not applied
-//  */
-// bool AmplifierClass::GetIsAmplifierEncoderLimitApplied() {
+/**
+ * @brief Set the state of amplifier encoder limit
+ * @param newState Enable / disable limits
+ */
+void AmplifierClass::SetIsAmplifierEncoderLimitApplied( bool newState ) {
 
-// 	return Command.Limits.isEncoderLimitApplied;
-// }
+	Command.Limits.isEncoderLimitApplied = newState;
+}
+
+
+/**
+ * @brief Set the flag that limits have been measured
+ * @param newState Toggle flag
+ */
+void AmplifierClass::SetIsAmplifierEncoderLimitSet( bool newState ) {
+
+	Command.Limits.isEncoderLimitSet = newState;
+}
+
+
+/**
+ * @brief Check if limits have been set
+ * @return true Limits set
+ * @return false Limits not set
+ */
+bool AmplifierClass::GetIsAmplifierEncoderLimitSet() {
+
+	return Command.Limits.isEncoderLimitSet;
+}
+
+
+/**
+ * @brief Check if limits are being applied
+ * @return true Limits applied
+ * @return false Limits not applied
+ */
+bool AmplifierClass::GetIsAmplifierEncoderLimitApplied() {
+
+	return Command.Limits.isEncoderLimitApplied;
+}
 
 
 // /**************
@@ -1400,92 +1395,29 @@ float AmplifierClass::GetCurrentFromIntegerPercentage( uint8_t percentValue ) {
  */
 void AmplifierClass::DriveMotorOutputs() {
 
-	// Shared Memory Alias
-	static auto Shared = SYSTEM_GLOBAL.GetData();
+	// Check if limits test is running
+	if ( Command.Limits.isEncoderLimitBeingTested ) {
 
-	if ( Shared->Sensors.MotorEncoders.Limits.isBeingMeasured ) {
-		TestEncoderLimits();
+		// Map terms
+		MapPolarTermsToCommandOutput( Command.Limits.testHeading, Command.Limits.testMagnitude );
+
+		// Increment angle
+		Command.Limits.testHeading = Command.Limits.testHeading + 0.1f;
+
+		if ( Command.Limits.testHeading >= 360.0f ) {
+			Command.Limits.testHeading = 0.0f;
+		}
+
+		// Debug display
+		// Serial.print( "ROM Test >> Theta: " );
+		// Serial.print( Command.Limits.testHeading );
+		// Serial.print( "° / " );
+		// Serial.print( Command.Limits.testMagnitude );
+		// Serial.println();
 	}
 
 	// Command PWM
 	CommandPWM();
-}
-
-
-void AmplifierClass::TestEncoderLimits() {
-
-
-	// // Shared Memory Alias
-	// static auto Shared = SYSTEM_GLOBAL.GetData();
-
-	// 	// Map terms
-	// 	MapPolarTermsToCommandOutput( Shared->Sensors.MotorEncoders.Limits. Command.Limits.testHeading, Command.Limits.testMagnitude );
-
-	// 	// Increment angle
-	// 	Command.Limits.testHeading = Command.Limits.testHeading + 0.1f;
-
-	// 	if ( Command.Limits.testHeading >= 360.0f ) {
-	// 		Command.Limits.testHeading = 0.0f;
-	// 	}
-
-	// Debug display
-	// Serial.print( "ROM Test >> Theta: " );
-	// Serial.print( Command.Limits.testHeading );
-	// Serial.print( "° / " );
-	// Serial.print( Command.Limits.testMagnitude );
-	// Serial.println();
-}
-
-void AmplifierClass::ApplyEncoderLimits() {
-
-
-	// Shared memory alias
-	static auto Shared = SYSTEM_GLOBAL.GetData();
-
-	// Motor A encoder has passed limits
-	if ( Shared->Sensors.MotorEncoders.compensatedCountA > Shared->Sensors.MotorEncoders.Limits.limitCountA ) {
-
-		Serial.println( F( "Over Limit A!" ) );
-
-		// Apply last current value
-		Shared->Drive.Pwm.rawOutgoingA = Shared->Drive.Pwm.totalOutgoingPrevA;
-	}
-	// Motor encoder has NOT passed limits
-	else {
-
-		// Store last value
-		Shared->Drive.Pwm.totalOutgoingPrevA = Shared->Drive.Pwm.rawOutgoingA;
-	}
-
-	// Motor B encoder has passed limits
-	if ( Shared->Sensors.MotorEncoders.compensatedCountB > Shared->Sensors.MotorEncoders.Limits.limitCountB ) {
-
-		Serial.println( F( "Over Limit B!" ) );
-
-		// Apply last current value
-		Shared->Drive.Pwm.rawOutgoingB = Shared->Drive.Pwm.totalOutgoingPrevB;
-	}
-	// Motor encoder has NOT passed limits
-	else {
-
-		// Store last value
-		Shared->Drive.Pwm.totalOutgoingPrevB = Shared->Drive.Pwm.rawOutgoingB;
-	}
-
-	// Motor C encoder has passed limits
-	if ( Shared->Sensors.MotorEncoders.compensatedCountC > Shared->Sensors.MotorEncoders.Limits.limitCountC ) {
-
-		Serial.println( F( "Over Limit C!" ) );
-
-		// Apply last current value
-		Shared->Drive.Pwm.rawOutgoingC = Shared->Drive.Pwm.totalOutgoingPrevC;
-	}
-	// Motor encoder has NOT passed limits
-	else {
-
-		// Store last value
-		Shared->Drive.Pwm.totalOutgoingPrevC = Shared->Drive.Pwm.rawOutgoingC;
-	}
 }
 
 
@@ -1498,10 +1430,52 @@ void AmplifierClass::CommandPWM() {
 	static auto Shared = SYSTEM_GLOBAL.GetData();
 
 	// Check if encoder limits are being applied
-	if ( Shared->Sensors.MotorEncoders.Limits.isEnabled ) {
+	if ( Command.Limits.isEncoderLimitApplied ) {
 
-		// Apply limits
-		ApplyEncoderLimits();
+		// Motor A encoder has passed limits
+		if ( Sensors.compensatedEncoderCountA > Command.Limits.encoderLimitA ) {
+
+			Serial.println( F( "Over Limit A!" ) );
+
+			// Apply last current value
+			Shared->Drive.Pwm.rawOutgoingA = Shared->Drive.Pwm.totalOutgoingPrevA;
+		}
+		// Motor encoder has NOT passed limits
+		else {
+
+			// Store last value
+			Shared->Drive.Pwm.totalOutgoingPrevA = Shared->Drive.Pwm.rawOutgoingA;
+		}
+
+		// Motor B encoder has passed limits
+		if ( Sensors.compensatedEncoderCountB > Command.Limits.encoderLimitB ) {
+
+			Serial.println( F( "Over Limit B!" ) );
+
+			// Apply last current value
+			Shared->Drive.Pwm.rawOutgoingB = Shared->Drive.Pwm.totalOutgoingPrevB;
+		}
+		// Motor encoder has NOT passed limits
+		else {
+
+			// Store last value
+			Shared->Drive.Pwm.totalOutgoingPrevB = Shared->Drive.Pwm.rawOutgoingB;
+		}
+
+		// Motor C encoder has passed limits
+		if ( Sensors.compensatedEncoderCountC > Command.Limits.encoderLimitC ) {
+
+			Serial.println( F( "Over Limit C!" ) );
+
+			// Apply last current value
+			Shared->Drive.Pwm.rawOutgoingC = Shared->Drive.Pwm.totalOutgoingPrevC;
+		}
+		// Motor encoder has NOT passed limits
+		else {
+
+			// Store last value
+			Shared->Drive.Pwm.totalOutgoingPrevC = Shared->Drive.Pwm.rawOutgoingC;
+		}
 	}
 
 
@@ -1568,8 +1542,7 @@ void AmplifierClass::CommandZero() {
  */
 void AmplifierClass::MapPolarTermsToCommandOutput( float theta, float magnitude ) {
 
-	// Shared memory alias
-	static auto Shared = SYSTEM_GLOBAL.GetData();
+
 
 	// Local variables
 	float thetaTarget	  = radians( theta );	   // Target angle
@@ -1591,21 +1564,21 @@ void AmplifierClass::MapPolarTermsToCommandOutput( float theta, float magnitude 
 	 ****************************************/
 
 	// Target angle between A and C
-	if ( thetaTarget >= Mapping.thetaC || thetaTarget < Mapping.thetaA ) {
+	if ( thetaTarget >= Command.Mapping.thetaC || thetaTarget < Command.Mapping.thetaA ) {
 
 		// Wrap around for 360/0 deg, calculate angle AC
-		if ( thetaTarget < Mapping.thetaA ) {
-			thetaAT = Mapping.thetaA - thetaTarget;
-			thetaCT = Mapping.angleAC - thetaAT;
+		if ( thetaTarget < Command.Mapping.thetaA ) {
+			thetaAT = Command.Mapping.thetaA - thetaTarget;
+			thetaCT = Command.Mapping.angleAC - thetaAT;
 		}
-		if ( thetaTarget > Mapping.thetaC ) {
-			thetaCT = thetaTarget - Mapping.thetaC;
-			thetaAT = Mapping.angleAC - thetaCT;
+		if ( thetaTarget > Command.Mapping.thetaC ) {
+			thetaCT = thetaTarget - Command.Mapping.thetaC;
+			thetaAT = Command.Mapping.angleAC - thetaCT;
 		}
 
 		// Save values
-		percentageA = ( 1.0f - ( thetaAT / Mapping.angleAC ) ) * targetMagnitude;
-		percentageC = ( 1.0f - ( thetaCT / Mapping.angleAC ) ) * targetMagnitude;
+		percentageA = ( 1.0f - ( thetaAT / Command.Mapping.angleAC ) ) * targetMagnitude;
+		percentageC = ( 1.0f - ( thetaCT / Command.Mapping.angleAC ) ) * targetMagnitude;
 
 		// Debug values
 		// Serial.print( "AC >> A: " );
@@ -1614,15 +1587,15 @@ void AmplifierClass::MapPolarTermsToCommandOutput( float theta, float magnitude 
 		// Serial.print( percentageC );
 		// Serial.println();
 
-	} else if ( ( thetaTarget >= Mapping.thetaA ) && ( thetaTarget < Mapping.thetaB ) ) {
+	} else if ( ( thetaTarget >= Command.Mapping.thetaA ) && ( thetaTarget < Command.Mapping.thetaB ) ) {
 
 		// Calculate angles
-		thetaAT = thetaTarget - Mapping.thetaA;
-		thetaBT = Mapping.angleAB - thetaAT;
+		thetaAT = thetaTarget - Command.Mapping.thetaA;
+		thetaBT = Command.Mapping.angleAB - thetaAT;
 
 		// Save values
-		percentageA = ( 1.0f - ( thetaAT / Mapping.angleAB ) ) * targetMagnitude;
-		percentageB = ( 1.0f - ( thetaBT / Mapping.angleAB ) ) * targetMagnitude;
+		percentageA = ( 1.0f - ( thetaAT / Command.Mapping.angleAB ) ) * targetMagnitude;
+		percentageB = ( 1.0f - ( thetaBT / Command.Mapping.angleAB ) ) * targetMagnitude;
 
 		// Debug values
 		// Serial.print( "AB >> A: " );
@@ -1631,15 +1604,15 @@ void AmplifierClass::MapPolarTermsToCommandOutput( float theta, float magnitude 
 		// Serial.print( percentageB );
 		// Serial.println();
 
-	} else if ( ( thetaTarget >= Mapping.thetaB ) && ( thetaTarget < Mapping.thetaC ) ) {
+	} else if ( ( thetaTarget >= Command.Mapping.thetaB ) && ( thetaTarget < Command.Mapping.thetaC ) ) {
 
 		// Calculate angles
-		thetaBT = thetaTarget - Mapping.thetaB;
-		thetaCT = Mapping.angleBC - thetaBT;
+		thetaBT = thetaTarget - Command.Mapping.thetaB;
+		thetaCT = Command.Mapping.angleBC - thetaBT;
 
 		// Save values
-		percentageB = ( 1.0f - ( thetaBT / Mapping.angleBC ) ) * targetMagnitude;
-		percentageC = ( 1.0f - ( thetaCT / Mapping.angleBC ) ) * targetMagnitude;
+		percentageB = ( 1.0f - ( thetaBT / Command.Mapping.angleBC ) ) * targetMagnitude;
+		percentageC = ( 1.0f - ( thetaCT / Command.Mapping.angleBC ) ) * targetMagnitude;
 
 		// Debug values
 		// Serial.print( "BC >> B: " );
@@ -1709,21 +1682,18 @@ void AmplifierClass::MapPercentageToPwmABC( float percentA, float percentB, floa
  */
 void AmplifierClass::StartMeasuringRangeOfMotionLimits() {
 
-	// Shared memory alias
-	static auto Shared = SYSTEM_GLOBAL.GetData();
-
 	// Check if limit is being measured for the first time
-	if ( Shared->Sensors.MotorEncoders.Limits.isBeingMeasured == false ) {
+	if ( Command.Limits.isEncoderLimitBeingMeasured == false ) {
 
 		// Update flags
-		Shared->Sensors.MotorEncoders.Limits.isSet			 = false;
-		Shared->Sensors.MotorEncoders.Limits.isEnabled		 = false;
-		Shared->Sensors.MotorEncoders.Limits.isBeingMeasured = true;
+		Command.Limits.isEncoderLimitSet		   = false;
+		Command.Limits.isEncoderLimitApplied	   = false;
+		Command.Limits.isEncoderLimitBeingMeasured = true;
 
 		// Reset limitss
-		Shared->Sensors.MotorEncoders.Limits.limitCountA = 0;
-		Shared->Sensors.MotorEncoders.Limits.limitCountB = 0;
-		Shared->Sensors.MotorEncoders.Limits.limitCountC = 0;
+		Command.Limits.encoderLimitA = 0;
+		Command.Limits.encoderLimitB = 0;
+		Command.Limits.encoderLimitC = 0;
 	}
 }
 
@@ -1733,75 +1703,63 @@ void AmplifierClass::StartMeasuringRangeOfMotionLimits() {
  */
 void AmplifierClass::StopMeasuringRangeOfMotionLimits() {
 
-	// Shared memory alias
-	static auto Shared = SYSTEM_GLOBAL.GetData();
-
 	// Update flag
-	Shared->Sensors.MotorEncoders.Limits.isBeingMeasured = false;
-	Shared->Sensors.MotorEncoders.Limits.isSet			 = true;
-	Shared->Sensors.MotorEncoders.Limits.isEnabled		 = true;
+	Command.Limits.isEncoderLimitBeingMeasured = false;
+	Command.Limits.isEncoderLimitSet		   = true;
+	Command.Limits.isEncoderLimitApplied	   = true;
 }
 
 
 // === RANGE OF MOTION LIMIT TESTING ==============================================================
 
-// /**
-//  * @brief Start the range of motion limit test
-//  */
-// void AmplifierClass::StartTestingRangeOfMotionLimits() {
+/**
+ * @brief Start the range of motion limit test
+ */
+void AmplifierClass::StartTestingRangeOfMotionLimits() {
 
-// 	// // Shared memory alias
-// 	// static auto Shared = SYSTEM_GLOBAL.GetData();
+	// Check if limits are already being tested
+	if ( Command.Limits.isEncoderLimitBeingTested == false ) {
 
-// 	// // Check if limits are already being tested
-// 	// if ( Shared->Sensors.MotorEncoders.Limits.isBeingTested == false ) {
+		// Update flags
+		Command.Limits.isEncoderLimitBeingTested = true;
 
-// 	// 	// Update flags
-// 	// 	Shared->Sensors.MotorEncoders.Limits.isBeingTested = true;
-
-// 	// 	// Reset values
-// 	// 	Command.Limits.testHeading	 = 0.0f;
-// 	// 	Command.Limits.testMagnitude = 0.0f;
-// 	// }
-// }
+		// Reset values
+		Command.Limits.testHeading	 = 0.0f;
+		Command.Limits.testMagnitude = 0.0f;
+	}
+}
 
 
-// void AmplifierClass::StopTestingRangeOfMotionLimits() {
+void AmplifierClass::StopTestingRangeOfMotionLimits() {
 
-// 	// Shared memory alias
-// 	static auto Shared = SYSTEM_GLOBAL.GetData();
+	// Update flags
+	Command.Limits.isEncoderLimitBeingTested = false;
+}
 
-// 	// Update flags
-// 	Shared->Sensors.MotorEncoders.Limits.isBeingTested = false;
-// }
+void AmplifierClass::IncreaseRangeOfMotionMagnitude() {
 
-// void AmplifierClass::IncreaseRangeOfMotionMagnitude() {
+	// Increase test magnitude
+	if ( Command.Limits.testMagnitude < 98.0f ) {
+		Command.Limits.testMagnitude = Command.Limits.testMagnitude + 2.0f;
+	} else {
+		Command.Limits.testMagnitude = 100.0f;
+	}
+}
 
-// 		// Shared memory alias
-// 		static auto Shared = SYSTEM_GLOBAL.GetData();
+void AmplifierClass::DecreaseRangeOfMotionMagnitude() {
 
-// 	// // Increase test magnitude
-// 	// if ( Command.Limits.testMagnitude < 98.0f ) {
-// 	// 	Command.Limits.testMagnitude = Command.Limits.testMagnitude + 2.0f;
-// 	// } else {
-// 	// 	Command.Limits.testMagnitude = 100.0f;
-// 	// }
-// }
+	// Decrease test magnitude
+	if ( Command.Limits.testMagnitude > 2.0f ) {
+		Command.Limits.testMagnitude = Command.Limits.testMagnitude - 2.0f;
+	} else {
+		Command.Limits.testMagnitude = 0.0f;
+	}
+}
 
-// void AmplifierClass::DecreaseRangeOfMotionMagnitude() {
+float AmplifierClass::GetTestMagnitude() {
 
-// 	// // Decrease test magnitude
-// 	// if ( Command.Limits.testMagnitude > 2.0f ) {
-// 	// 	Command.Limits.testMagnitude = Command.Limits.testMagnitude - 2.0f;
-// 	// } else {
-// 	// 	Command.Limits.testMagnitude = 0.0f;
-// 	// }
-// }
-
-// float AmplifierClass::GetTestMagnitude() {
-
-// 	return Command.Limits.testMagnitude;
-// }
+	return Command.Limits.testMagnitude;
+}
 /***
  * *****
  * 
@@ -1893,11 +1851,14 @@ void AmplifierClass::ReadSafetySwitchState() {
 	static auto Shared = SYSTEM_GLOBAL.GetData();
 
 	// Read state
-	Shared->Drive.Flags.isSafetySwitchEngaged = digitalReadFast( PIN_AMPLIFIER_SAFETY );
+	Command.Flags.isSafetySwitchEnabled = digitalReadFast( PIN_AMPLIFIER_SAFETY );
+
+	// Update shared memory
+	Shared->Drive.Flags.isSafetySwitchEngaged = Command.Flags.isSafetySwitchEnabled;
 
 	// Disable amplifier if safety switch is off
-	if ( !Shared->Drive.Flags.isSafetySwitchEngaged ) {
-		Shared->Drive.Flags.isMotorOutputEnabled = false;
+	if ( !Command.Flags.isSafetySwitchEnabled ) {
+		Command.Flags.isOutputEnabled = false;
 	}
 }
 

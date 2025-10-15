@@ -1,4 +1,7 @@
 #include "ArmEncoders.h"
+#include "SharedMemory.h"
+
+
 
 ArmEncoderClass::ArmEncoderClass()
 	: encoderHorizontal( PIN_ENCODER_HOR_A, PIN_ENCODER_HOR_B )
@@ -14,9 +17,17 @@ void ArmEncoderClass::Begin() {
 	ConfigurePins();
 
 	delay( 250 );
-	Serial.println( F( "Platform encoder initialization...            Success!" ) );
+	Serial.println( F( "PLATFORM:      Arm encoder interface...                Ready." ) );
 }
 
+/**
+ * @brief Updates every loop
+ */
+void ArmEncoderClass::Loop() {
+
+	// Poll encoders
+	PollEncoders();
+}
 
 /**
  * @brief Get the newest horizontal angle
@@ -53,25 +64,15 @@ void ArmEncoderClass::ConfigurePins() {
 }
 
 
-/**
- * @brief Runs every loop to update encoder class
- */
-void ArmEncoderClass::Check( float& horizontal, float& vertical ) {
-
-	// Poll encoders
-	PollEncoders();
-
-	// Update values
-	horizontal = horizontalAngleDegrees;
-	vertical   = verticalAngleDegrees;
-}
-
-
 
 /**
  * @brief Read both encoders
  */
 void ArmEncoderClass::PollEncoders() {
+
+
+	// Shared memory alias
+	static auto System = SYSTEM_GLOBAL.GetData();
 
 	// Read new horizontal values
 	horizontalCountNew = encoderHorizontal.read();
@@ -81,7 +82,8 @@ void ArmEncoderClass::PollEncoders() {
 		horizontalCountOld = horizontalCountNew;
 
 		// Calculate angle
-		horizontalAngleDegrees = -1.0f * degrees( horizontalCountNew * ( 2.0f * M_PI ) / ( 2.0f * 4096.0f ) );
+		horizontalAngleDegrees									= -1.0f * degrees( horizontalCountNew * ( 2.0f * M_PI ) / ( 2.0f * 4096.0f ) );
+		System->Sensors.PlatformEncoders.horizontalAngleDegrees = horizontalAngleDegrees;
 	}
 
 	// Read new vertical values
@@ -92,15 +94,19 @@ void ArmEncoderClass::PollEncoders() {
 		verticalCountOld = verticalCountNew;
 
 		// Calculate angle
-		verticalAngleDegrees = -1.0f * degrees( verticalCountNew * ( 2.0f * M_PI ) / 5000.0f / 4.0f );
+		verticalAngleDegrees								  = -1.0f * degrees( verticalCountNew * ( 2.0f * M_PI ) / 5000.0f / 4.0f );
+		System->Sensors.PlatformEncoders.verticalAngleDegrees = horizontalAngleDegrees;
 	}
 }
 
 
 
-void ArmEncoderClass::ZeroEncoders() {
+void ArmEncoderClass::ZeroArmEncoders() {
 
 	// Write zeros to encoders
 	encoderHorizontal.write( 0 );
 	encoderVertical.write( 0 );
+
+	// Reset action flag
+	SYSTEM_GLOBAL.ResetActionFlag( SYSTEM_GLOBAL.GetData()->ActionQueue.zeroPlatformEncoders );
 }

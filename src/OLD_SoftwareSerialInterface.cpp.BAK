@@ -1,6 +1,9 @@
 #include "SoftwareSerialInterface.h"
+#include "SharedMemory.h"
 
+// === SharedMemory Local Alias ===================================================================
 
+auto System = SYSTEM_GLOBAL.GetData();
 
 // /*  ===================================================================================
 //  *  ===================================================================================
@@ -22,10 +25,8 @@ SoftwareSerialInterfaceClass* SoftwareSerialInterfaceClass::instance = nullptr;
 
 
 // Constructor
-SoftwareSerialInterfaceClass::SoftwareSerialInterfaceClass( systemStateEnum& systemStateRef, AmplifierClass& ampRef, ArmEncoderClass& armEncRef )
-	: SystemStateReference( systemStateRef )
-	, AmplifierReference( ampRef )
-	, ArmEncoderReference( armEncRef ) {
+SoftwareSerialInterfaceClass::SoftwareSerialInterfaceClass(   )
+	 {
 	SoftwareSerialInterfaceClass::instance = this;
 }
 
@@ -137,25 +138,36 @@ void SoftwareSerialInterfaceClass::RespondToKeyboardCommands() {
 
 			// Update state
 			SYSTEM_STATE = systemStateEnum::IDLE;
-			currentState = "IDLE";
 		}
 
 		// Set measure ROM state
 		if ( cmd == '1' ) {
 
-			Respond_MeasureAmplifierRangeOfMotionLimits(  );
+			Respond_MeasureAmplifierRangeOfMotionLimits();
 		}
 
-		// Set measure current state
+		// Test RoM
 		if ( cmd == '2' ) {
 
-			// Respond_MeasureAmplifierCurrentLimit( false );
+			Respond_TestRangeOfMotionLimits();
+		}
+
+		// Discrimination Task: Cardinal Direction
+		if ( cmd == '3' ) {
+
+			Respond_DiscriminationTaskCardinal();
 		}
 
 		// Set tension value
-		if ( cmd == 'T' || cmd == 't' ) {
+		if ( cmd == 't' ) {
 
-			Respond_SetTension();
+			Respond_SetTensionValue();
+		}
+
+		// Toggle tension enable / disable
+		if ( cmd == 'T' ) {
+
+			Respond_ToggleTensionState();
 		}
 
 		// Print system state
@@ -214,7 +226,7 @@ void SoftwareSerialInterfaceClass::RespondToKeyboardCommands() {
 /**
   * @brief Sets the tension
   */
-void SoftwareSerialInterfaceClass::Respond_SetTension() {
+void SoftwareSerialInterfaceClass::Respond_SetTensionValue() {
 
 	// Check: is the next character a number
 	if ( isdigit( incomingSerialString.charAt( 1 ) ) ) {
@@ -235,6 +247,10 @@ void SoftwareSerialInterfaceClass::Respond_SetTension() {
 			// Set tension value
 			AmplifierReference.SetTension( tensionValue, tensionValue, tensionValue );
 
+			// ENable tension and motor
+			AmplifierReference.SetTensionState( true );
+			AmplifierReference.SetAmplifierOutputState( true );
+
 		} else {
 
 			// Serial response
@@ -246,6 +262,21 @@ void SoftwareSerialInterfaceClass::Respond_SetTension() {
 		Serial.println( F( "   Invalid tension command! Value is non-numeric." ) );
 	}
 }
+
+
+
+/**
+  * @brief Sets the tension
+  */
+void SoftwareSerialInterfaceClass::Respond_ToggleTensionState() {
+
+	// Extract existing state
+	bool tensionState = AmplifierReference.GetTensionState();
+
+	// Toggle state
+	AmplifierReference.SetTensionState( !tensionState );
+}
+
 
 
 /**
@@ -329,7 +360,7 @@ void SoftwareSerialInterfaceClass::Respond_ToggleCurrentLimits() {
 	if ( !isLimitApplied ) {
 
 		// Check if limits have been set before enabling limits
-		if ( !AmplifierReference.Command.Limits.isAmplifierPowerLimitSet ) {
+		if ( !AmplifierReference.GetIsAmplifierPowerLimitSet() ) {
 
 			// Limits have not been set, don't enable limits
 			AmplifierReference.SetIsAmplifierPowerLimitApplied( false );
@@ -347,17 +378,20 @@ void SoftwareSerialInterfaceClass::Respond_ToggleCurrentLimits() {
 }
 
 
-void SoftwareSerialInterfaceClass::Respond_MeasureAmplifierRangeOfMotionLimits(  ) {
+void SoftwareSerialInterfaceClass::Respond_MeasureAmplifierRangeOfMotionLimits() {
 
 	// Check if already running
 	if ( SYSTEM_STATE != systemStateEnum::MEASURING_RANGE_OF_MOTION ) {
+
+		// Zero encoders
+		AmplifierReference.ZeroMotorEncoders();
 
 		// Start measuring
 		AmplifierReference.StartMeasuringRangeOfMotionLimits();
 
 		// Update state
 		SYSTEM_STATE = systemStateEnum::MEASURING_RANGE_OF_MOTION;
-		currentState = "MEASURING_ROM";
+		// currentState = "MEASURING_ROM";
 
 	} else {
 
@@ -366,12 +400,64 @@ void SoftwareSerialInterfaceClass::Respond_MeasureAmplifierRangeOfMotionLimits( 
 
 		// Update state
 		SYSTEM_STATE = systemStateEnum::IDLE;
-		currentState = "IDLE";
+		// currentState = "IDLE";
 	}
-
 }
 
 
+/**
+ * @brief Callback to read current limits
+ */
+void SoftwareSerialInterfaceClass::Respond_TestRangeOfMotionLimits() {
+
+	// // Check if already running
+	// if ( SYSTEM_STATE != systemStateEnum::TESTING_RANGE_OF_MOTION ) {
+
+	// 	// Start measuring
+	// 	AmplifierReference.StartTestingRangeOfMotionLimits();
+
+	// 	// Update state
+	// 	SYSTEM_STATE = systemStateEnum::TESTING_RANGE_OF_MOTION;
+	// 	currentState = "MEASURING_CURRENT";
+
+	// } else {
+
+	// 	// Stop measuring
+	// 	AmplifierReference.StopTestingRangeOfMotionLimits();
+
+	// 	// Update state
+	// 	SYSTEM_STATE = systemStateEnum::IDLE;
+	// 	currentState = "IDLE";
+	// }
+}
+
+
+
+/**
+ * @brief Callback to discrimination task
+ */
+void SoftwareSerialInterfaceClass::Respond_DiscriminationTaskCardinal() {
+
+
+	// Check if already running
+	if ( SYSTEM_STATE != systemStateEnum::DISCRIMINATION_TASK_TESTING ) {
+
+		
+		TaskManagerReference.StartDiscriminationTaskCardinal( 4 );
+		SYSTEM_STATE = systemStateEnum::DISCRIMINATION_TASK_TESTING;
+		
+
+
+	} else {
+
+
+		// Update state
+		SYSTEM_STATE = systemStateEnum::IDLE;
+		// currentState = "IDLE";
+	}
+
+	// Start task
+}
 
 // /*  ===================================================================================
 //  *  ===================================================================================
@@ -477,7 +563,13 @@ void SoftwareSerialInterfaceClass::PrintScrollingOutput() {
 
 	// Safety switch
 	Serial.print( F( "STATE: " ) );
-	Serial.print( currentState );
+	if ( SYSTEM_STATE == systemStateEnum::IDLE ) {
+		Serial.print( "IDLE" );
+	} else if ( SYSTEM_STATE == systemStateEnum::DISCRIMINATION_TASK_TESTING ) {
+		Serial.print( "DISC_TESTING" );
+	} else if ( SYSTEM_STATE == systemStateEnum::MEASURING_RANGE_OF_MOTION ) {
+		Serial.print( "MEASURING_ROM" );
+	}
 	Serial.print( F( "    " ) );
 	Serial.print( F( "Output: " ) );
 	Serial.print( AmplifierReference.GetAmplifierOutputState() ? "ON" : "Off" );
@@ -487,6 +579,31 @@ void SoftwareSerialInterfaceClass::PrintScrollingOutput() {
 	Serial.print( F( "    " ) );
 	Serial.print( F( "Baud: " ) );
 	Serial.print( AmplifierReference.GetBaudA() );
+
+	// Tension
+	Serial.print( F( "    " ) );
+	Serial.print( F( "Tension: " ) );
+	if ( AmplifierReference.GetTensionState() ) {
+		Serial.print( F( "ON, " ) );
+		Serial.print( AmplifierReference.GetTensionValue() );
+		Serial.print( F( "%" ) );
+	} else {
+		Serial.print( F( "Off" ) );
+	}
+
+	// Motor Limits
+	Serial.print( F( "    " ) );
+	Serial.print( F( "Motor Limit: " ) );
+	Serial.print( AmplifierReference.GetIsAmplifierPowerLimitSet() ? "SET" : "Not Set" );
+	Serial.print( F( ", " ) );
+	Serial.print( AmplifierReference.GetIsAmplifierPowerLimitApplied() ? "ON" : "Off" );
+	Serial.print( F( "    " ) );
+	Serial.print( F( "LimitsABC: " ) );
+	Serial.print( AmplifierReference.GetAmplifierPwmPowerLimitA() );
+	Serial.print( F( " | " ) );
+	Serial.print( AmplifierReference.GetAmplifierPwmPowerLimitB() );
+	Serial.print( F( " | " ) );
+	Serial.print( AmplifierReference.GetAmplifierPwmPowerLimitC() );
 
 	// Motor output
 	Serial.print( F( "    " ) );
@@ -504,26 +621,20 @@ void SoftwareSerialInterfaceClass::PrintScrollingOutput() {
 	Serial.print( AmplifierReference.GetCurrentReadingC() );
 	Serial.print( F( "A" ) );
 
-	// Motor Limits
+	// Encoder Limits
 	Serial.print( F( "    " ) );
-	Serial.print( F( "Motor Limit: " ) );
-	Serial.print( AmplifierReference.Command.Limits.isAmplifierPowerLimitSet ? "SET" : "Not Set" );
+	Serial.print( F( "Encoder Limit: " ) );
+	Serial.print( AmplifierReference.GetIsAmplifierEncoderLimitSet() ? "SET" : "Not Set" );
 	Serial.print( F( ", " ) );
-	Serial.print( AmplifierReference.Command.Limits.isAmplifierPowerLimitApplied ? "ON" : "Off" );
+	Serial.print( AmplifierReference.GetIsAmplifierEncoderLimitApplied() ? "ON" : "Off" );
 	Serial.print( F( "    " ) );
 	Serial.print( F( "LimitsABC: " ) );
-	Serial.print( AmplifierReference.GetAmplifierPwmPowerLimitA() );
-	Serial.print( F( " | " ) );
-	Serial.print( AmplifierReference.GetAmplifierPwmPowerLimitB() );
-	Serial.print( F( " | " ) );
-	Serial.print( AmplifierReference.GetAmplifierPwmPowerLimitC() );
-
-
-	// Tension
-	Serial.print( F( "    " ) );
-	Serial.print( F( "Tension: " ) );
-	Serial.print( AmplifierReference.GetTensionValue() );
-	Serial.print( "%" );
+	Serial.print( AmplifierReference.GetAmplifierEncoderLimitA() );
+	Serial.print( F( "° | " ) );
+	Serial.print( AmplifierReference.GetAmplifierEncoderLimitB() );
+	Serial.print( F( "° | " ) );
+	Serial.print( AmplifierReference.GetAmplifierEncoderLimitC() );
+	Serial.print( F( "°" ) );
 
 	// Motor encoders (deg)
 	Serial.print( F( "    " ) );
@@ -535,21 +646,6 @@ void SoftwareSerialInterfaceClass::PrintScrollingOutput() {
 	Serial.print( AmplifierReference.GetAngleDegC() );
 	Serial.print( F( "°" ) );
 
-	// Encoder Limits
-	Serial.print( F( "    " ) );
-	Serial.print( F( "Encoder Limit: " ) );
-	Serial.print( AmplifierReference.Command.Limits.isEncoderLimitSet ? "SET" : "Not Set" );
-	Serial.print( F( ", " ) );
-	Serial.print( AmplifierReference.Command.Limits.isEncoderLimitApplied ? "ON" : "Off" );
-	Serial.print( F( "    " ) );
-	Serial.print( F( "LimitsABC: " ) );
-	Serial.print( AmplifierReference.GetAmplifierEncoderLimitA() );
-	Serial.print( F( " | " ) );
-	Serial.print( AmplifierReference.GetAmplifierEncoderLimitB() );
-	Serial.print( F( " | " ) );
-	Serial.print( AmplifierReference.GetAmplifierEncoderLimitC() );
-
-
 	// Arm encoders
 	Serial.print( F( "    " ) );
 	Serial.print( F( "ThetaXY [deg]: " ) );
@@ -557,6 +653,14 @@ void SoftwareSerialInterfaceClass::PrintScrollingOutput() {
 	Serial.print( F( "° | " ) );
 	Serial.print( ArmEncoderReference.GetVerticalAngleDeg() );
 	Serial.print( F( "°" ) );
+
+	// Gamepad
+	Serial.print( F( "   " ) );
+	Serial.print( F( "Gamepad: " ) );
+	Serial.print( gamepadButton );
+	Serial.print( F( " (" ) );
+	Serial.print( gamepadString );
+	Serial.print( F( ")" ) );
 
 	Serial.println();
 }
@@ -590,6 +694,53 @@ void SoftwareSerialInterfaceClass::PrintMenu() {
 	Serial.println( F( "Platform:      [Z] Zero platform encoders" ) );
 }
 
+
+void SoftwareSerialInterfaceClass::UpdateButtonState( bool newState, int8_t newButton, String newName ) {
+
+	// Save button
+	isGamepadButtonPressed = newState;
+	gamepadButton		   = newButton;
+	gamepadString		   = newName;
+
+	// if ( newState == true ) {
+	//
+	ParseGamepadInput();
+	// isGamepadButtonPressed = false;
+	// }
+}
+
+
+/**
+ * @brief Parse and respond to gamepad input
+ */
+void SoftwareSerialInterfaceClass::ParseGamepadInput() {
+
+	if ( SYSTEM_STATE == systemStateEnum::MEASURING_RANGE_OF_MOTION ) {
+
+		// Select which button to update
+
+		// Top+Right Button (Amp A)
+		if ( gamepadButton == 8 ) {
+
+			// Decrease
+			AmplifierReference.DecreaseRangeOfMotionMagnitude();
+			Serial.print( "Magnitude: " );
+			Serial.print( AmplifierReference.GetTestMagnitude() );
+		}
+
+		if ( gamepadButton == 9 ) {
+
+			// Increase
+			AmplifierReference.IncreaseRangeOfMotionMagnitude();
+			Serial.print( "Magnitude: " );
+			Serial.print( AmplifierReference.GetTestMagnitude() );
+		}
+	} else if ( SYSTEM_STATE == systemStateEnum::DISCRIMINATION_TASK_TESTING ) {
+
+		// Send gamepad input to task manager
+		TaskManagerReference.EnterResponse( gamepadButton );
+	}
+}
 
 
 // 	/**
